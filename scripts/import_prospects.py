@@ -11,7 +11,7 @@ Issue kata y89n.
 """
 import os, re, sys, json, subprocess
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from crm_client import TwentyClient  # noqa: E402
+from crm_client import TwentyClient  # noqa: E402  # type: ignore[import-not-found]
 
 PROJECT = "46108107"
 # mapping curé par carte (identités B2B + colonne) — pas d'email/CR ici
