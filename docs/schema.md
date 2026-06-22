@@ -1,0 +1,87 @@
+# Schéma de données — CRM Kutsh (Twenty)
+
+Source de vérité du modèle. Versionné ici ; reflété dans Twenty via l'API (`crm_client.py`). Toute évolution du modèle passe par ce fichier d'abord.
+
+## Objets custom
+
+### Collectivité
+Commune ou EPCI — cœur de cible B2G.
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| nom | text | manuel / DGCL | |
+| code_insee / siren | text | DGCL | identifiant pivot |
+| type | select | DGCL | commune \| EPCI |
+| population | number | INSEE/DGCL | |
+| editeur_ads | relation → Éditeur ADS | enrichissement | éditeur en place |
+| plui | relation → PLUi | enrichissement | PLUi applicable |
+| volume_dossiers_an | number | SITADEL | dossiers d'urbanisme/an |
+| statut_doc | select | GPU | RNU \| PLU \| PLUi |
+| date_derniere_revision | date | GPU | |
+| maturite_numerique | select | estimation | faible \| moyenne \| élevée |
+
+### PLUi
+Document d'urbanisme.
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| nom | text | GPU | |
+| perimetre | text/geo | GPU | périmètre géographique |
+| date_approbation | date | GPU | |
+| date_derniere_modification | date | GPU | |
+| lien_gpu | url | GPU | |
+| statut_sru | select | GPU | |
+| complexite_estimee | select | scoring | faible \| moyenne \| élevée |
+
+### Cabinet
+Dessinateur-projeteur / architecte — cible B2B.
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| nom | text | manuel | |
+| zone_intervention | text | manuel/LinkedIn | |
+| volume_estime_dossiers | number | estimation | |
+| collectivites_servies | relation → Collectivité (n..n) | enrichissement | |
+| taux_refus | number | si connu | indicateur d'opportunité |
+
+### Éditeur ADS
+Cart@DS, Oxalis, NetADS, Next'ADS, openADS…
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| nom | text | manuel | |
+| collectivites_clientes | relation → Collectivité (n..n) | enrichissement | |
+| part_marche_estimee | number | estimation | |
+| potentiel_integration_api | select | analyse | faible \| moyen \| élevé |
+
+### Signal
+Événement détecté par le monitoring (Phase 3).
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| type | select | monitoring | révision PLUi \| marché public \| post LinkedIn \| refus dossier |
+| date | date | monitoring | |
+| entites_liees | relation (polymorphe) | monitoring | Collectivité / Cabinet / Éditeur ADS… |
+| action_suggeree | text | scoring | brief / appel / réponse AO |
+| statut | select | workflow | nouveau \| traité \| ignoré |
+
+## Objets standard Twenty (conservés)
+
+- **People** — contacts individuels (interlocuteurs collectivités, cabinets…).
+- **Companies** — organisations génériques hors objets custom.
+- **Deals** — pipeline commercial, segmenté par `segment` (B2G / B2B / B2B2B).
+
+## Relations principales
+
+- Collectivité 1..n PLUi · Collectivité n..1 Éditeur ADS
+- Cabinet n..n Collectivité (collectivités servies)
+- Éditeur ADS n..n Collectivité (clientes)
+- Signal n..n {Collectivité, Cabinet, Éditeur ADS, Deal}
+- People n..1 {Collectivité, Cabinet, Éditeur ADS, Company}
+- Deal n..1 {Collectivité, Cabinet} + `segment`
+
+## Pipelines (Deals, champ `segment` + `stage`)
+
+- **B2G** : veille → DCE → offre → audition → notification → exécution
+- **B2B** : lead → démo → essai → abonnement
+- **B2B2B** : contact → POC → contrat-cadre
