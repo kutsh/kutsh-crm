@@ -97,13 +97,21 @@ class TwentyClient:
         return self.upsert("collectivites", "codeInseeSiren",
                            {"codeInseeSiren": code_insee_siren, "name": name, **fields})
 
+    def find_person(self, first_name: str, last_name: str, email: str | None = None) -> dict | None:
+        if email:
+            hit = self.find_one("people", "emails.primaryEmail", email)
+            if hit:
+                return hit
+        rows = self.list("people", filter=f"name.firstName[eq]:{first_name},name.lastName[eq]:{last_name}", limit=1)
+        return rows[0] if rows else None
+
     def upsert_contact(self, first_name: str, last_name: str, email: str | None = None, **fields) -> dict:
         data = {"name": {"firstName": first_name, "lastName": last_name}, **fields}
         if email:
             data["emails"] = {"primaryEmail": email}
-            existing = self.find_one("people", "emails.primaryEmail", email)
-            if existing:
-                return self.update("people", existing["id"], data)
+        existing = self.find_person(first_name, last_name, email)
+        if existing:
+            return self.update("people", existing["id"], data)
         return self.create("people", data)
 
     def update_deal(self, deal_id: str, **fields) -> dict:
