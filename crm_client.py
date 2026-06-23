@@ -61,6 +61,25 @@ class TwentyClient:
             params["depth"] = depth
         return self._req("GET", f"/rest/{object_plural}", params=params)["data"][object_plural]
 
+    def list_page(self, object_plural: str, limit: int = 60, starting_after: str | None = None,
+                  depth: int = 0) -> tuple[list[dict], dict]:
+        params: dict = {"limit": limit, "depth": depth}
+        if starting_after:
+            params["starting_after"] = starting_after
+        d = self._req("GET", f"/rest/{object_plural}", params=params)
+        return d["data"][object_plural], d.get("pageInfo", {})
+
+    def list_all(self, object_plural: str, page_size: int = 60, depth: int = 0):
+        """Itère toutes les pages (curseur Twenty) — pour l'export complet."""
+        cur = None
+        while True:
+            rows, pi = self.list_page(object_plural, limit=page_size, starting_after=cur, depth=depth)
+            yield from rows
+            if pi.get("hasNextPage") and pi.get("endCursor"):
+                cur = pi["endCursor"]
+            else:
+                return
+
     def find_one(self, object_plural: str, field: str, value) -> dict | None:
         rows = self.list(object_plural, filter=f"{field}[eq]:{value}", limit=1)
         return rows[0] if rows else None
