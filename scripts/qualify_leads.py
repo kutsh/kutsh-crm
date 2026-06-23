@@ -115,7 +115,9 @@ def main() -> None:
         if org and seg:
             company = c.upsert("companies", "name", {"name": org})
             company_id = company["id"]
-            c.update("people", p["id"], {"companyId": company_id})
+            # Ne pas écraser un rattachement existant (contacts déjà curés).
+            if not p.get("companyId"):
+                c.update("people", p["id"], {"companyId": company_id})
         deal: dict = {
             "name": f"Lead — {first} {last}" + (f" ({org})" if org else ""),
             "stage": "PROSPECTION",
