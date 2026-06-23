@@ -1,0 +1,16 @@
+[project]
+name = "kutsh-crm"
+version = "0.1.0"
+description = "Couche Python du CRM Kutsh (Twenty) — abstraction crm_client (client REST partageable)"
+requires-python = ">=3.11"
+dependencies = []  # crm_client = stdlib pur (urllib)
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Module unique packagé → `import crm_client` après installation.
+# Consommation depuis un autre service Python :
+#   uv add "kutsh-crm @ git+https://github.com/kutsh/kutsh-crm.git"
+[tool.hatch.build.targets.wheel]
+include = ["crm_client.py"]
