@@ -67,6 +67,27 @@ def classify(first: str, last: str, email: str, model: str) -> dict:
     return out
 
 
+def post_basecamp_digest(items: list[dict]) -> None:
+    """Poste un digest des leads qualifiés dans le Campfire Basecamp (même
+    mécanisme que la landing : lines_url signée). Non bloquant."""
+    url = os.environ.get("BASECAMP_CHATBOT_LINES_URL")
+    if not url or not items:
+        return
+    rows = []
+    for it in items:
+        org = it.get("org") or "—"
+        seg = it.get("segment") or "à préciser"
+        rows.append(f"• <b>{it['name']}</b> — {org} <i>[{seg}]</i><br>&nbsp;&nbsp;↳ {it.get('action') or ''}")
+    content = (f"🎯 <b>Qualification — {len(items)} lead(s)</b><br>" + "<br>".join(rows))
+    try:
+        req = urllib.request.Request(
+            url, data=json.dumps({"content": content}).encode(), method="POST",
+            headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=20)
+    except Exception:
+        print("  ⚠ digest Basecamp non posté (lines_url ?)")
+
+
 def unqualified_leads(c: TwentyClient) -> list[dict]:
     contacted = {
         o.get("pointOfContactId")
@@ -93,6 +114,7 @@ def main() -> None:
     leads = unqualified_leads(c)[: a.limit]
     print(f"[{mode}] {len(leads)} lead(s) non qualifié(s) à traiter (modèle {a.model})\n")
     done = 0
+    qualified: list[dict] = []
     for p in leads:
         first, last = fullname(p)
         email = ((p.get("emails") or {}).get("primaryEmail")) or ""
@@ -135,8 +157,11 @@ def main() -> None:
         })
         c.create("noteTargets", {"noteId": note["id"], "targetPersonId": p["id"]})
         done += 1
+        qualified.append({"name": f"{first} {last}", "org": org, "segment": seg, "action": q.get("action")})
     if a.apply:
-        print(f"\nOK : {done} lead(s) qualifié(s) (Deal + Note créés).")
+        post_basecamp_digest(qualified)
+        print(f"\nOK : {done} lead(s) qualifié(s) (Deal + Note créés"
+              + (", digest Basecamp posté)." if qualified else ")."))
     else:
         print("\n(DRY-RUN — rien écrit. Relancer avec --apply pour appliquer.)")
 
