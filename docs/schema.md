@@ -80,8 +80,23 @@ Cart@DS, Oxalis, NetADS, Next'ADS, openADS…
 - People n..1 {Collectivité, Cabinet, Éditeur ADS, Company}
 - Deal n..1 {Collectivité, Cabinet} + `segment`
 
-## Pipelines (Deals, champ `segment` + `stage`)
+## Pipeline commercial (Opportunity)
 
-- **B2G** : veille → DCE → offre → audition → notification → exécution
-- **B2B** : lead → démo → essai → abonnement
-- **B2B2B** : contact → POC → contrat-cadre
+Twenty n'expose qu'**un seul champ `stage`** par objet → on adopte un **pipeline unifié** + un champ `segment` pour distinguer les trois cycles (script : `scripts/configure_pipeline.py`, idempotent). Issue `mfmp`.
+
+**`segment`** (SELECT) : `B2G` · `B2B` · `B2B2B`.
+
+**`stage`** (SELECT, 8 étapes, défaut `PROSPECTION`) — chaque étape porte le vocabulaire des trois cycles :
+
+| `stage` | Label | B2G (marché public) | B2B (SaaS) | B2B2B (API) |
+|---|---|---|---|---|
+| PROSPECTION | Prospection | veille | lead | contact |
+| QUALIFICATION | Qualification | qualification | qualification | qualification |
+| ECHANGE | Démo / Échange | échange | démo | échange |
+| OFFRE | Offre | DCE / offre | proposition | POC |
+| EVALUATION | Audition / Essai | audition | essai | pilote |
+| GAGNE | Gagné | notification | abonnement | contrat-cadre |
+| EXECUTION | En exécution | exécution du marché | — | — |
+| PERDU | Perdu | infructueux / non retenu | churn | abandon |
+
+> Vues filtrées par `segment` (à créer côté UI) pour un board par cycle.
