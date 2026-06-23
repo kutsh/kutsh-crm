@@ -1,1 +1,6 @@
 .kata.local.toml
+.env
+.venv/
+__pycache__/
+*.pyc
+snapshots/
