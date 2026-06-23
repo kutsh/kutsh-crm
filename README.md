@@ -22,25 +22,24 @@ Principe : changer de CRM = repointer `crm_client.py`. Les données métier ne b
 
 ## Composants
 
-- `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts métier, pagination). `uv run python crm_client.py selftest`.
-- `mcp_server.py` — **serveur MCP** exposant le CRM aux agents (10 outils : contacts, collectivités, opportunités, signaux, notes, lectures). Transport stdio.
+- `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts idempotents métier, pagination). Stdlib pur. Point d'isolation anti-lock-in + socle des scripts batch.
 - `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (snapshot hebdo, déployé en cron serveur).
 
-## Serveur MCP
+## Pilotage par agents (MCP)
 
-Rend le CRM pilotable par Claude. Lancement local :
+Twenty expose un **serveur MCP natif** (HTTP, joignable y compris par les routines cloud) — pas de serveur custom à maintenir. Enregistrement dans Claude :
 
-```bash
-TWENTY_API_KEY=… TWENTY_BASE_URL=https://twenty.kutsh.fr uv run kutsh-crm-mcp
+```json
+{
+  "mcpServers": {
+    "twenty": {
+      "url": "https://twenty.kutsh.fr/mcp",
+      "headers": { "Authorization": "Bearer <TWENTY_API_KEY>" }
+    }
+  }
+}
 ```
 
-Enregistrement dans Claude Code :
+Il offre le CRUD complet sur tous les objets (`find_many_*`, `create_*`, `update_*`…) plus des actions (`send_email`, `draft_email`, `navigate_app`), des skills et la recherche dans la doc.
 
-```bash
-claude mcp add kutsh-crm \
-  -e TWENTY_API_KEY=… -e TWENTY_BASE_URL=https://twenty.kutsh.fr \
-  -- uv run --directory /Users/joel/Dropbox/Kutsh/kutsh-crm kutsh-crm-mcp
-```
-
-Outils : `list_crm_objects`, `list_records`, `find_person`, `upsert_contact`, `get_territory`,
-`upsert_collectivite`, `create_opportunity`, `update_deal`, `create_signal`, `add_note`.
+> `crm_client.py` reste pour les opérations **batch déterministes / idempotentes** (imports, configuration, export hebdo) — complémentaire du MCP, pas redondant.
