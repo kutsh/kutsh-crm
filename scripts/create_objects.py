@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Crée (idempotent) les 5 objets custom du CRM Kutsh dans Twenty via l'API metadata.
+"""Crée (idempotent) les objets custom du CRM Kutsh dans Twenty via l'API metadata.
+
+6 objets : Collectivité, PLUi, Cabinet, Éditeur ADS, Signal + jonction Intervention
+(Cabinet × Collectivité, m2m absent nativement de Twenty — issue 1dhk). Plus les
+relations MANY_TO_ONE (People/Opportunity/Signal → entités).
 Env requis : TWENTY_API_KEY, TWENTY_BASE_URL (def https://twenty.kutsh.fr).
-Modèle de référence : ../docs/schema.md. Voir issue kata c2we."""
+Modèle de référence : ../docs/schema.md. Voir issues kata c2we, 1dhk."""
 import os, json, unicodedata, urllib.request
 
 BASE = os.environ.get("TWENTY_BASE_URL", "https://twenty.kutsh.fr").rstrip("/")
@@ -65,12 +69,33 @@ OBJECTS = [
      dict(name="actionSuggeree", label="Action suggérée", type="TEXT"),
      dict(name="statut", label="Statut", type="SELECT", options=opts(["Nouveau","Traité","Ignoré"])),
    ]),
+ # Objet de jonction Cabinet <-> Collectivité (m2m, absent nativement de Twenty) — issue 1dhk.
+ dict(ns="intervention", np="interventions", ls="Intervention", lp="Interventions", icon="IconArrowsLeftRight",
+   fields=[
+     dict(name="typeIntervention", label="Rôle", type="SELECT", options=opts(["Dessinateur-projeteur","Architecte","AMO","Autre"])),
+   ]),
 ]
 
-# relations MANY_TO_ONE : (objet source, nom champ, label, objet cible, label champ inverse)
+# relations MANY_TO_ONE : (objet source, nom champ, label, objet cible, label champ inverse, icône)
 RELATIONS = [
  ("collectivite","editeurAds","Éditeur ADS","editeurAds","Collectivités","IconDatabase"),
  ("collectivite","plui","PLUi","plui","Collectivités","IconMap2"),
+ # Jonction Cabinet <-> Collectivité (m2m via Intervention) — issue 1dhk.
+ ("intervention","cabinet","Cabinet","cabinet","Interventions","IconRulerMeasure"),
+ ("intervention","collectivite","Collectivité","collectivite","Interventions","IconBuildingCommunity"),
+ # Contacts : People n..1 {Collectivité, Cabinet, Éditeur ADS} — issue 1dhk.
+ ("person","collectivite","Collectivité","collectivite","Contacts","IconBuildingCommunity"),
+ ("person","cabinet","Cabinet","cabinet","Contacts","IconRulerMeasure"),
+ ("person","editeurAds","Éditeur ADS","editeurAds","Contacts","IconDatabase"),
+ # Deals : Opportunity n..1 {Collectivité, Cabinet} — issue 1dhk (segment déjà posé).
+ ("opportunity","collectivite","Collectivité","collectivite","Opportunités","IconBuildingCommunity"),
+ ("opportunity","cabinet","Cabinet","cabinet","Opportunités","IconRulerMeasure"),
+ # Signaux : Signal n..1 {Collectivité, Cabinet, Éditeur ADS, Deal} (polymorphe = relations
+ # nullables, l'idiome Twenty) — issue 1dhk. Relie les signaux d5td aux territoires.
+ ("signal","collectivite","Collectivité","collectivite","Signaux","IconBuildingCommunity"),
+ ("signal","cabinet","Cabinet","cabinet","Signaux","IconRulerMeasure"),
+ ("signal","editeurAds","Éditeur ADS","editeurAds","Signaux","IconDatabase"),
+ ("signal","opportunity","Opportunité","opportunity","Signaux","IconTargetArrow"),
 ]
 
 def fetch_objects():

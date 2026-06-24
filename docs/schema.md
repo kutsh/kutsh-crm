@@ -65,6 +65,16 @@ Cart@DS, Oxalis, NetADS, Next'ADS, openADS…
 | action_suggeree | text | scoring | brief / appel / réponse AO |
 | statut | select | workflow | nouveau \| traité \| ignoré |
 
+### Intervention (objet de jonction — issue 1dhk)
+Réalise le many-to-many **Cabinet ↔ Collectivité** (absent nativement de Twenty).
+Chaque ligne = un cabinet intervenant pour une collectivité.
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| cabinet | relation → Cabinet (n..1) | manuel/enrichissement | |
+| collectivite | relation → Collectivité (n..1) | manuel/enrichissement | |
+| typeIntervention | select | manuel | dessinateur-projeteur \| architecte \| AMO \| autre |
+
 ## Objets standard Twenty (conservés)
 
 - **People** — contacts individuels (interlocuteurs collectivités, cabinets…).
@@ -73,12 +83,12 @@ Cart@DS, Oxalis, NetADS, Next'ADS, openADS…
 
 ## Relations principales
 
-- Collectivité 1..n PLUi · Collectivité n..1 Éditeur ADS
-- Cabinet n..n Collectivité (collectivités servies)
-- Éditeur ADS n..n Collectivité (clientes)
-- Signal n..n {Collectivité, Cabinet, Éditeur ADS, Deal}
-- People n..1 {Collectivité, Cabinet, Éditeur ADS, Company}
-- Deal n..1 {Collectivité, Cabinet} + `segment`
+- Collectivité 1..n PLUi · Collectivité n..1 Éditeur ADS ✅
+- Cabinet n..n Collectivité — **via objet Intervention** (1dhk) ✅
+- Éditeur ADS n..n Collectivité (clientes) — couvert par l'inverse de Collectivité n..1 Éditeur ADS ✅
+- Signal n..1 {Collectivité, Cabinet, Éditeur ADS, Deal} (polymorphe = relations nullables) ✅ (1dhk)
+- People n..1 {Collectivité, Cabinet, Éditeur ADS, Company} ✅ (1dhk)
+- Deal n..1 {Collectivité, Cabinet} + `segment` ✅ (1dhk)
 
 ## Pipeline commercial (Opportunity)
 
