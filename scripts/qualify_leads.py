@@ -34,6 +34,8 @@ CATEGORIES = {
     "COLLECTIVITE_EPCI", "FEDERATION_PRO", "FEDERATION_COLLECTIVITES", "RESEAU_ELUS",
     "CABINET", "EDITEUR_ADS", "FABRICANT", "MEDIA", "ACADEMIQUE", "INSTITUTIONNEL", "AUTRE",
 }
+# Relais / prescripteurs : pas des ventes directes → Deal de partenariat (segment RELAIS).
+RELAIS_CATEGORIES = {"FEDERATION_PRO", "FEDERATION_COLLECTIVITES", "RESEAU_ELUS"}
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 PROMPT = """Tu qualifies un lead entrant pour Kutsh, une startup d'IA de conformité \
@@ -161,13 +163,14 @@ def main() -> None:
         if not a.apply:
             continue
         # --- écritures Twenty ---
-        # Company seulement si classification confiante (orga ET segment) —
+        cat = q.get("categorie")
+        is_relais = cat in RELAIS_CATEGORIES
+        # Company : si orga connue ET (segment commercial connu OU relais) —
         # évite de créer des sociétés douteuses sur les leads INCONNU.
         company_id = None
-        if org and seg:
+        if org and (seg or is_relais):
             existing = c.find_one("companies", "name", org)
             payload = {"name": org}
-            cat = q.get("categorie")
             # Catégorie posée seulement si absente (ne pas écraser une curation humaine).
             if cat and not (existing and existing.get("categorie")):
                 payload["categorie"] = cat
@@ -176,24 +179,41 @@ def main() -> None:
             # Ne pas écraser un rattachement existant (contacts déjà curés).
             if not p.get("companyId"):
                 c.update("people", p["id"], {"companyId": company_id})
-        deal: dict = {
-            "name": f"Lead — {first} {last}" + (f" ({org})" if org else ""),
-            "stage": "PROSPECTION",
-            "pointOfContactId": p["id"],
-        }
-        if seg:
-            deal["segment"] = seg
+        if is_relais:
+            # Relais / prescripteur : pas une vente → Deal de PARTENARIAT (segment
+            # RELAIS), suivi dans le pipeline filtrable, pas dans le cycle de vente.
+            deal: dict = {
+                "name": f"Partenariat — {org or last}",
+                "stage": "PROSPECTION",
+                "segment": "RELAIS",
+                "pointOfContactId": p["id"],
+            }
+            note_md = (
+                f"**Relais / prescripteur** ({cat}).\n\n{q.get('brief')}\n\n"
+                f"**Action suggérée** : {q.get('action')}\n\n"
+                "_Pas une vente directe : explorer un partenariat pour accéder aux membres._"
+            )
+        else:
+            deal = {
+                "name": f"Lead — {first} {last}" + (f" ({org})" if org else ""),
+                "stage": "PROSPECTION",
+                "pointOfContactId": p["id"],
+            }
+            if seg:
+                deal["segment"] = seg
+            note_md = (f"**Segment** : {seg or 'à préciser'}\n\n"
+                       f"{q.get('brief')}\n\n**Action suggérée** : {q.get('action')}")
         if company_id:
             deal["companyId"] = company_id
         deal_rec = c.create("opportunities", deal)
         note = c.create("notes", {
             "title": f"Qualification — {first} {last}",
-            "bodyV2": {"markdown": f"**Segment** : {seg or 'à préciser'}\n\n"
-                                   f"{q.get('brief')}\n\n**Action suggérée** : {q.get('action')}"},
+            "bodyV2": {"markdown": note_md},
         })
         c.create("noteTargets", {"noteId": note["id"], "targetPersonId": p["id"]})
         done += 1
-        qualified.append({"name": f"{first} {last}", "org": org, "segment": seg,
+        qualified.append({"name": f"{first} {last}", "org": org,
+                          "segment": "RELAIS" if is_relais else seg,
                           "action": q.get("action"), "deal_id": deal_rec.get("id"), "person_id": p["id"]})
     if a.apply:
         post_basecamp_digest(qualified)

@@ -10,7 +10,10 @@ le vocabulaire des trois cycles (cf. cadrage / Model Eco) :
 
 Idempotent. Env : TWENTY_API_KEY (+ TWENTY_BASE_URL).
 """
-import os, json, urllib.request, urllib.error
+import os
+import json
+import urllib.request
+import urllib.error
 
 BASE = os.environ.get("TWENTY_BASE_URL", "https://twenty.kutsh.fr").rstrip("/")
 KEY = os.environ["TWENTY_API_KEY"]
@@ -19,6 +22,9 @@ SEGMENT_OPTIONS = [
     {"value": "B2G", "label": "B2G", "position": 0, "color": "blue"},
     {"value": "B2B", "label": "B2B", "position": 1, "color": "green"},
     {"value": "B2B2B", "label": "B2B2B", "position": 2, "color": "orange"},
+    # RELAIS = relation indirecte (fédération / réseau prescripteur), pas une vente
+    # directe → pipeline « partenariats » filtrable par ce segment.
+    {"value": "RELAIS", "label": "Relais / partenariat", "position": 3, "color": "purple"},
 ]
 
 # Pipeline unifié (UPPER_SNAKE -> label lisible portant le vocabulaire des 3 segments)
@@ -53,17 +59,21 @@ def main():
     fields = req("GET", f"/rest/metadata/objects/{opp['id']}")["data"]["object"]["fields"]
     by_name = {f["name"]: f for f in fields}
 
-    # 1. champ segment (créer si absent)
+    # 1. champ segment (créer si absent, sinon synchroniser les options → ajoute RELAIS)
     if "segment" in by_name:
-        print("segment: déjà présent")
+        req("PATCH", f"/rest/metadata/fields/{by_name['segment']['id']}", {
+            "options": SEGMENT_OPTIONS,
+        })
+        print(f"segment: {len(SEGMENT_OPTIONS)} valeurs synchronisées (dont RELAIS)")
     else:
         req("POST", "/rest/metadata/fields", {
             "objectMetadataId": opp["id"], "name": "segment", "label": "Segment",
             "type": "SELECT", "icon": "IconTargetArrow",
-            "description": "Segment commercial : B2G (collectivités) / B2B (cabinets) / B2B2B (fabricants).",
+            "description": "Segment commercial : B2G (collectivités) / B2B (cabinets) / "
+                           "B2B2B (fabricants) / RELAIS (fédération, réseau prescripteur).",
             "options": SEGMENT_OPTIONS,
         })
-        print("segment: créé (B2G / B2B / B2B2B)")
+        print("segment: créé (B2G / B2B / B2B2B / RELAIS)")
 
     # 2. options du stage (pipeline unifié)
     stage = by_name["stage"]
