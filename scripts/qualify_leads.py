@@ -14,7 +14,12 @@ Usage :
 Sans --apply : DRY-RUN (n'écrit rien, montre le plan).
 """
 from __future__ import annotations
-import os, sys, json, re, argparse, urllib.request
+import os
+import sys
+import json
+import re
+import argparse
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from crm_client import TwentyClient  # noqa: E402  # type: ignore[import-not-found]
@@ -25,6 +30,10 @@ PERSONAL_DOMAINS = {
     "laposte.net", "pm.me", "proton.me", "icloud.com",
 }
 SEGMENTS = {"B2G", "B2B", "B2B2B"}
+CATEGORIES = {
+    "COLLECTIVITE_EPCI", "FEDERATION_PRO", "FEDERATION_COLLECTIVITES", "RESEAU_ELUS",
+    "CABINET", "EDITEUR_ADS", "FABRICANT", "MEDIA", "ACADEMIQUE", "INSTITUTIONNEL", "AUTRE",
+}
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 PROMPT = """Tu qualifies un lead entrant pour Kutsh, une startup d'IA de conformité \
@@ -34,9 +43,19 @@ architectes (B2B), fabricants à réseau de revendeurs / configurateurs (B2B2B).
 Lead : prénom={first!r} nom={last!r} email={email!r} (domaine={domain!r}).
 
 Déduis l'organisation probable (nom lisible depuis le domaine, ou null si email \
-personnel), le segment, un brief de qualification (2 phrases max), et une action \
-suggérée concrète (1 phrase). Réponds STRICTEMENT en JSON :
-{{"organisation": <str|null>, "segment": "B2G"|"B2B"|"B2B2B"|"INCONNU", "brief": <str>, "action": <str>}}"""
+personnel), le segment, la catégorie d'organisation, un brief de qualification \
+(2 phrases max), et une action suggérée concrète (1 phrase).
+
+Catégories possibles (ou null si indéterminable) : COLLECTIVITE_EPCI (mairie, \
+métropole, EPCI), CABINET (dessinateur-projeteur / architecte), FABRICANT, \
+EDITEUR_ADS (éditeur de logiciel ADS / urbanisme), FEDERATION_PRO (fédération ou \
+syndicat professionnel, ex FNDI), FEDERATION_COLLECTIVITES (asso/fédération de \
+collectivités, ex AMF / France urbaine), RESEAU_ELUS, MEDIA, ACADEMIQUE, \
+INSTITUTIONNEL (CEREMA / CAUE…), AUTRE.
+
+Réponds STRICTEMENT en JSON :
+{{"organisation": <str|null>, "segment": "B2G"|"B2B"|"B2B2B"|"INCONNU", \
+"categorie": <str|null>, "brief": <str>, "action": <str>}}"""
 
 
 def classify(first: str, last: str, email: str, model: str) -> dict:
@@ -62,8 +81,11 @@ def classify(first: str, last: str, email: str, model: str) -> dict:
     out = json.loads(content)
     seg = (out.get("segment") or "").upper()
     out["segment"] = seg if seg in SEGMENTS else None
+    cat = (out.get("categorie") or "").upper()
+    out["categorie"] = cat if cat in CATEGORIES else None
     if domain in PERSONAL_DOMAINS:
         out["organisation"] = None
+        out["categorie"] = None
     return out
 
 
@@ -133,7 +155,7 @@ def main() -> None:
             continue
         org, seg = q.get("organisation"), q.get("segment")
         print(f"  • {first} {last} <{email}>")
-        print(f"      orga={org!r} segment={seg or 'INCONNU'}")
+        print(f"      orga={org!r} segment={seg or 'INCONNU'} categorie={q.get('categorie') or '—'}")
         print(f"      brief: {q.get('brief')}")
         print(f"      action: {q.get('action')}")
         if not a.apply:
@@ -143,7 +165,13 @@ def main() -> None:
         # évite de créer des sociétés douteuses sur les leads INCONNU.
         company_id = None
         if org and seg:
-            company = c.upsert("companies", "name", {"name": org})
+            existing = c.find_one("companies", "name", org)
+            payload = {"name": org}
+            cat = q.get("categorie")
+            # Catégorie posée seulement si absente (ne pas écraser une curation humaine).
+            if cat and not (existing and existing.get("categorie")):
+                payload["categorie"] = cat
+            company = c.upsert("companies", "name", payload)
             company_id = company["id"]
             # Ne pas écraser un rattachement existant (contacts déjà curés).
             if not p.get("companyId"):
