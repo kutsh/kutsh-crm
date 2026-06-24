@@ -73,12 +73,20 @@ def post_basecamp_digest(items: list[dict]) -> None:
     url = os.environ.get("BASECAMP_CHATBOT_LINES_URL")
     if not url or not items:
         return
+    base = (os.environ.get("TWENTY_BASE_URL") or "https://twenty.kutsh.fr").rstrip("/")
     rows = []
     for it in items:
-        org = it.get("org") or "—"
         seg = it.get("segment") or "à préciser"
-        rows.append(f"• <b>{it['name']}</b> — {org} <i>[{seg}]</i><br>&nbsp;&nbsp;↳ {it.get('action') or ''}")
-    content = (f"🎯 <b>Qualification — {len(items)} lead(s)</b><br>" + "<br>".join(rows))
+        org_part = f" — {it['org']}" if it.get("org") else ""
+        # Le nom pointe vers la carte Deal (le pipeline = là où on agit) ; + lien fiche contact.
+        deal_url = f"{base}/object/opportunity/{it['deal_id']}" if it.get("deal_id") else None
+        person_url = f"{base}/object/person/{it['person_id']}" if it.get("person_id") else None
+        name = f'<a href="{deal_url}">{it["name"]}</a>' if deal_url else it["name"]
+        action = it.get("action") or ""
+        fiche = f' · <a href="{person_url}">fiche contact ↗</a>' if person_url else ""
+        rows.append(f"• <b>{name}</b>{org_part} <i>[{seg}]</i><br>&nbsp;&nbsp;↳ {action}{fiche}")
+    content = (f"🎯 <b>Qualification — {len(items)} lead(s)</b> "
+               f'(<a href="{base}/objects/opportunities">pipeline ↗</a>)<br>' + "<br>".join(rows))
     try:
         req = urllib.request.Request(
             url, data=json.dumps({"content": content}).encode(), method="POST",
@@ -149,7 +157,7 @@ def main() -> None:
             deal["segment"] = seg
         if company_id:
             deal["companyId"] = company_id
-        c.create("opportunities", deal)
+        deal_rec = c.create("opportunities", deal)
         note = c.create("notes", {
             "title": f"Qualification — {first} {last}",
             "bodyV2": {"markdown": f"**Segment** : {seg or 'à préciser'}\n\n"
@@ -157,7 +165,8 @@ def main() -> None:
         })
         c.create("noteTargets", {"noteId": note["id"], "targetPersonId": p["id"]})
         done += 1
-        qualified.append({"name": f"{first} {last}", "org": org, "segment": seg, "action": q.get("action")})
+        qualified.append({"name": f"{first} {last}", "org": org, "segment": seg,
+                          "action": q.get("action"), "deal_id": deal_rec.get("id"), "person_id": p["id"]})
     if a.apply:
         post_basecamp_digest(qualified)
         print(f"\nOK : {done} lead(s) qualifié(s) (Deal + Note créés"
