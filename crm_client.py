@@ -94,7 +94,14 @@ class TwentyClient:
                 raise TwentyError(
                     f"{method} {path} -> HTTP {e.code}: {e.read().decode()[:300]}"
                 )
-        raise TwentyError(f"{method} {path} -> abandon après retries (rate limit ?)")
+            except (urllib.error.URLError, TimeoutError) as e:
+                # Erreur réseau transitoire (timeout SSL, connexion coupée) sur un run
+                # long → backoff puis retry, sinon un simple blip tue tout le batch.
+                if attempt < 5:
+                    time.sleep(5)
+                    continue
+                raise TwentyError(f"{method} {path} -> erreur réseau: {e}")
+        raise TwentyError(f"{method} {path} -> abandon après retries (réseau/rate limit ?)")
 
     # --- CRUD générique ---
     def list(
