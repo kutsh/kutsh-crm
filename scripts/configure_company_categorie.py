@@ -24,6 +24,7 @@ CATEGORIE_OPTIONS = [
     {"value": "RESEAU_PRO", "label": "Réseau pro (franchisés / BTP / BIM)", "color": "purple"},
     {"value": "CABINET", "label": "Cabinet (dessinateur-projeteur / archi / géomètre)", "color": "green"},
     {"value": "INSTRUCTEUR_PRIVE", "label": "Instructeur ADS privé", "color": "green"},
+    {"value": "CABINET_AVOCATS", "label": "Cabinet d'avocats", "color": "red"},
     {"value": "EDITEUR_ADS", "label": "Éditeur ADS", "color": "orange"},
     {"value": "FABRICANT", "label": "Fabricant / revendeur (véranda, abri, pergola…)", "color": "yellow"},
     {"value": "GSB_DISTRIBUTION", "label": "GSB / distribution / négoce matériaux", "color": "yellow"},
