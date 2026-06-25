@@ -56,6 +56,11 @@ def parse_addr(addr: str) -> tuple[str, str]:
     return commune, dept
 
 
+def valid_url(u: str) -> bool:
+    """URL exploitable par le champ LINKS de Twenty (rejette emails, 'https://NON'…)."""
+    return bool(re.match(r"https?://[^\s@]+\.[^\s@]+$", (u or "").strip()))
+
+
 def parse_phone(raw: str) -> dict[str, str] | None:
     """'+33 6 66 15 07 48' → composite Twenty (number + calling code + pays)."""
     raw = (raw or "").strip()
@@ -138,7 +143,7 @@ def main() -> int:
                     "typeCabinet": "DESSINATEUR_PROJETEUR",
                     "zoneIntervention": zone[:255],
                 }
-                if site.lower().startswith("http"):
+                if valid_url(site):
                     fields["siteWeb"] = {
                         "primaryLinkUrl": site,
                         "primaryLinkLabel": "Site",
