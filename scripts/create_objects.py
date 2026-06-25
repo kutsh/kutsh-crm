@@ -58,6 +58,7 @@ OBJECTS = [
      dict(name="tauxRefus", label="Taux de refus (%)", type="NUMBER"),
      dict(name="typeCabinet", label="Type", type="SELECT", options=opts(["Architecte","Géomètre-expert","Dessinateur-projeteur","Autre"])),
      dict(name="siren", label="SIREN", type="TEXT"),
+     dict(name="siteWeb", label="Site web", type="LINKS"),
    ]),
  dict(ns="editeurAds", np="editeursAds", ls="Éditeur ADS", lp="Éditeurs ADS", icon="IconDatabase",
    fields=[

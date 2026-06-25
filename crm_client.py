@@ -14,10 +14,29 @@ Conventions Twenty utiles :
 - SELECT : valeur en UPPER_SNAKE (ex. COMMUNE, RNU, ELEVEE).
 - person.name est composite : {"firstName": ..., "lastName": ...}.
 """
+
 from __future__ import annotations
-import os, json, urllib.request, urllib.parse, urllib.error
+import os, json, time, urllib.request, urllib.parse, urllib.error
+from collections import deque
 
 DEFAULT_BASE = "https://twenty.kutsh.fr"
+
+# Twenty limite à 100 requêtes / 60 s PAR WORKSPACE (partagé entre tous les
+# appelants). On s'auto-throttle sous ce plafond (fenêtre glissante) et on
+# retente les 429 (Retry-After) — indispensable quand un batch tourne en
+# parallèle (run nationale cabinets, flows Prefect…).
+_RATE_LIMIT = 70
+_RATE_WINDOW = 60.0
+_calls: deque[float] = deque()
+
+
+def _throttle() -> None:
+    now = time.monotonic()
+    while _calls and now - _calls[0] > _RATE_WINDOW:
+        _calls.popleft()
+    if len(_calls) >= _RATE_LIMIT:
+        time.sleep(max(0.0, _RATE_WINDOW - (now - _calls[0])) + 0.05)
+    _calls.append(time.monotonic())
 
 
 class TwentyError(RuntimeError):
@@ -30,28 +49,62 @@ class TwentyClient:
         if not key:
             raise TwentyError("TWENTY_API_KEY manquant (env ou argument)")
         self.api_key: str = key
-        self.base = (base_url or os.environ.get("TWENTY_BASE_URL", DEFAULT_BASE)).rstrip("/")
+        self.base = (
+            base_url or os.environ.get("TWENTY_BASE_URL", DEFAULT_BASE)
+        ).rstrip("/")
 
     # --- transport ---
-    def _req(self, method: str, path: str, params: dict | None = None, body: dict | None = None):
+    def _req(
+        self,
+        method: str,
+        path: str,
+        params: dict | None = None,
+        body: dict | None = None,
+    ):
         url = self.base + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(url, data=data, method=method, headers={
-            "Authorization": "Bearer " + self.api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "kutsh-crm/1.0",
-        })
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            raise TwentyError(f"{method} {path} -> HTTP {e.code}: {e.read().decode()[:300]}")
+        for attempt in range(6):
+            _throttle()
+            req = urllib.request.Request(
+                url,
+                data=data,
+                method=method,
+                headers={
+                    "Authorization": "Bearer " + self.api_key,
+                    "Content-Type": "application/json",
+                    "User-Agent": "kutsh-crm/1.0",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                # 429 (rate limit) ou 5xx transitoire → backoff puis retry.
+                if e.code in (429, 502, 503, 504) and attempt < 5:
+                    retry_after = e.headers.get("Retry-After") if e.headers else None
+                    delay = (
+                        float(retry_after)
+                        if retry_after and retry_after.isdigit()
+                        else 20.0
+                    )
+                    time.sleep(delay)
+                    continue
+                raise TwentyError(
+                    f"{method} {path} -> HTTP {e.code}: {e.read().decode()[:300]}"
+                )
+        raise TwentyError(f"{method} {path} -> abandon après retries (rate limit ?)")
 
     # --- CRUD générique ---
-    def list(self, object_plural: str, filter: str | None = None, limit: int = 60,
-             order_by: str | None = None, depth: int | None = None) -> list[dict]:
+    def list(
+        self,
+        object_plural: str,
+        filter: str | None = None,
+        limit: int = 60,
+        order_by: str | None = None,
+        depth: int | None = None,
+    ) -> list[dict]:
         params: dict = {"limit": limit}
         if filter:
             params["filter"] = filter
@@ -59,10 +112,17 @@ class TwentyClient:
             params["order_by"] = order_by
         if depth is not None:
             params["depth"] = depth
-        return self._req("GET", f"/rest/{object_plural}", params=params)["data"][object_plural]
+        return self._req("GET", f"/rest/{object_plural}", params=params)["data"][
+            object_plural
+        ]
 
-    def list_page(self, object_plural: str, limit: int = 60, starting_after: str | None = None,
-                  depth: int = 0) -> tuple[list[dict], dict]:
+    def list_page(
+        self,
+        object_plural: str,
+        limit: int = 60,
+        starting_after: str | None = None,
+        depth: int = 0,
+    ) -> tuple[list[dict], dict]:
         params: dict = {"limit": limit, "depth": depth}
         if starting_after:
             params["starting_after"] = starting_after
@@ -73,7 +133,9 @@ class TwentyClient:
         """Itère toutes les pages (curseur Twenty) — pour l'export complet."""
         cur = None
         while True:
-            rows, pi = self.list_page(object_plural, limit=page_size, starting_after=cur, depth=depth)
+            rows, pi = self.list_page(
+                object_plural, limit=page_size, starting_after=cur, depth=depth
+            )
             yield from rows
             if pi.get("hasNextPage") and pi.get("endCursor"):
                 cur = pi["endCursor"]
@@ -99,7 +161,9 @@ class TwentyClient:
         d = self._req("DELETE", f"/rest/{object_plural}/{record_id}")
         return next(iter(d["data"].values()))
 
-    def upsert(self, object_plural: str, match_field: str, data: dict, match_value=None) -> dict:
+    def upsert(
+        self, object_plural: str, match_field: str, data: dict, match_value=None
+    ) -> dict:
         """Crée ou met à jour selon match_field (clé naturelle)."""
         mv = match_value if match_value is not None else data.get(match_field)
         if mv is not None:
@@ -113,18 +177,29 @@ class TwentyClient:
         return self.find_one("collectivites", "codeInseeSiren", code_insee_siren)
 
     def upsert_collectivite(self, code_insee_siren: str, name: str, **fields) -> dict:
-        return self.upsert("collectivites", "codeInseeSiren",
-                           {"codeInseeSiren": code_insee_siren, "name": name, **fields})
+        return self.upsert(
+            "collectivites",
+            "codeInseeSiren",
+            {"codeInseeSiren": code_insee_siren, "name": name, **fields},
+        )
 
-    def find_person(self, first_name: str, last_name: str, email: str | None = None) -> dict | None:
+    def find_person(
+        self, first_name: str, last_name: str, email: str | None = None
+    ) -> dict | None:
         if email:
             hit = self.find_one("people", "emails.primaryEmail", email)
             if hit:
                 return hit
-        rows = self.list("people", filter=f"name.firstName[eq]:{first_name},name.lastName[eq]:{last_name}", limit=1)
+        rows = self.list(
+            "people",
+            filter=f"name.firstName[eq]:{first_name},name.lastName[eq]:{last_name}",
+            limit=1,
+        )
         return rows[0] if rows else None
 
-    def upsert_contact(self, first_name: str, last_name: str, email: str | None = None, **fields) -> dict:
+    def upsert_contact(
+        self, first_name: str, last_name: str, email: str | None = None, **fields
+    ) -> dict:
         data = {"name": {"firstName": first_name, "lastName": last_name}, **fields}
         if email:
             data["emails"] = {"primaryEmail": email}
@@ -136,8 +211,14 @@ class TwentyClient:
     def update_deal(self, deal_id: str, **fields) -> dict:
         return self.update("opportunities", deal_id, fields)
 
-    def create_signal(self, name: str, type_signal: str, action_suggeree: str | None = None,
-                       statut: str = "NOUVEAU", **fields) -> dict:
+    def create_signal(
+        self,
+        name: str,
+        type_signal: str,
+        action_suggeree: str | None = None,
+        statut: str = "NOUVEAU",
+        **fields,
+    ) -> dict:
         data = {"name": name, "typeSignal": type_signal, "statut": statut, **fields}
         if action_suggeree:
             data["actionSuggeree"] = action_suggeree
@@ -148,7 +229,9 @@ def _selftest():
     c = TwentyClient()
     code = "__selftest_99999__"
     print("1. upsert collectivite…")
-    r = c.upsert_collectivite(code, name="__selftest__", population=1, typeCollectivite="COMMUNE")
+    r = c.upsert_collectivite(
+        code, name="__selftest__", population=1, typeCollectivite="COMMUNE"
+    )
     assert r.get("id"), r
     print("   id =", r["id"])
     print("2. get_territory…")
@@ -165,6 +248,7 @@ def _selftest():
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "selftest":
         _selftest()
     else:
