@@ -56,6 +56,8 @@ OBJECTS = [
      dict(name="zoneIntervention", label="Zone d'intervention", type="TEXT"),
      dict(name="volumeEstimeDossiers", label="Volume estimé dossiers", type="NUMBER"),
      dict(name="tauxRefus", label="Taux de refus (%)", type="NUMBER"),
+     dict(name="typeCabinet", label="Type", type="SELECT", options=opts(["Architecte","Géomètre-expert","Dessinateur-projeteur","Autre"])),
+     dict(name="siren", label="SIREN", type="TEXT"),
    ]),
  dict(ns="editeurAds", np="editeursAds", ls="Éditeur ADS", lp="Éditeurs ADS", icon="IconDatabase",
    fields=[
