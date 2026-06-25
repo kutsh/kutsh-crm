@@ -41,6 +41,8 @@ OBJECTS = [
      dict(name="statutDocument", label="Statut document", type="SELECT", options=opts(["RNU","PLU","PLUi"])),
      dict(name="dateDerniereRevision", label="Date dernière révision", type="DATE"),
      dict(name="maturiteNumerique", label="Maturité numérique", type="SELECT", options=opts(["Faible","Moyenne","Élevée"])),
+     dict(name="scoreIcp", label="Score ICP", type="NUMBER"),
+     dict(name="tierIcp", label="Tier ICP", type="SELECT", options=opts(["A","B","C","D"])),
    ]),
  dict(ns="plui", np="pluis", ls="PLUi", lp="PLUi", icon="IconMap2",
    fields=[
@@ -59,6 +61,8 @@ OBJECTS = [
      dict(name="typeCabinet", label="Type", type="SELECT", options=opts(["Architecte","Géomètre-expert","Dessinateur-projeteur","Autre"])),
      dict(name="siren", label="SIREN", type="TEXT"),
      dict(name="siteWeb", label="Site web", type="LINKS"),
+     dict(name="scoreIcp", label="Score ICP", type="NUMBER"),
+     dict(name="tierIcp", label="Tier ICP", type="SELECT", options=opts(["A","B","C","D"])),
    ]),
  dict(ns="editeurAds", np="editeursAds", ls="Éditeur ADS", lp="Éditeurs ADS", icon="IconDatabase",
    fields=[
