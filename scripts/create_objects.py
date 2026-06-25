@@ -64,7 +64,7 @@ OBJECTS = [
    ]),
  dict(ns="signal", np="signals", ls="Signal", lp="Signaux", icon="IconBolt",
    fields=[
-     dict(name="typeSignal", label="Type", type="SELECT", options=opts(["Révision PLUi","Marché public","Post LinkedIn","Refus dossier"])),
+     dict(name="typeSignal", label="Type", type="SELECT", options=opts(["Révision PLUi","Marché public","Post LinkedIn","Refus dossier","Renouvellement ADS"])),
      dict(name="dateSignal", label="Date", type="DATE_TIME"),
      dict(name="actionSuggeree", label="Action suggérée", type="TEXT"),
      dict(name="statut", label="Statut", type="SELECT", options=opts(["Nouveau","Traité","Ignoré"])),
