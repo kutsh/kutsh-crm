@@ -1,0 +1,33 @@
+name: newsletter-sync
+
+# Synchro récurrente Twenty -> Brevo (listes newsletter) + rapatriement des
+# désinscriptions Brevo -> Twenty. NE crée PAS les campagnes (drafts = manuel).
+# Décision : decisions/2026-07-07-crm-brevo-newsletter-sync.md
+#
+# Prérequis (une fois) : ajouter les secrets du repo
+#   Settings → Secrets and variables → Actions →
+#     TWENTY_API_KEY, BREVO_API_KEY
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # tous les jours à 06:00 UTC
+  workflow_dispatch: {}    # déclenchement manuel (avant un envoi, par ex.)
+
+concurrency:
+  group: newsletter-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Twenty -> Brevo (reconcile + sync)
+        env:
+          TWENTY_API_KEY: ${{ secrets.TWENTY_API_KEY }}
+          TWENTY_BASE_URL: https://twenty.kutsh.fr
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+        run: python scripts/sync_twenty_brevo.py all

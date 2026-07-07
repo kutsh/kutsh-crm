@@ -23,7 +23,30 @@ Principe : changer de CRM = repointer `crm_client.py`. Les données métier ne b
 ## Composants
 
 - `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts idempotents métier, pagination). Stdlib pur. Point d'isolation anti-lock-in + socle des scripts batch.
-- `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (snapshot hebdo, déployé en cron serveur).
+- `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (snapshot hebdo, déployé en cron serveur), `sync_twenty_brevo.py` + `configure_newsletter_fields.py` + `enrich_newsletter_contacts.py` (newsletter → Brevo, cf. ci-dessous).
+
+## Newsletter → Brevo
+
+Diffusion des lettres d'information segmentées via Brevo, alimentées depuis Twenty.
+Décision : [`decisions/2026-07-07-crm-brevo-newsletter-sync.md`](decisions/2026-07-07-crm-brevo-newsletter-sync.md).
+
+- **Segmentation** : le segment d'un contact (→ liste Brevo) est déduit de son
+  organisation : relation custom (`cabinetId`→Pros, `collectiviteId`→Collectivités,
+  `editeurAdsId`→Écosystème), sinon `Company.categorie`, avec **override explicite**
+  par le champ Person `newsletterSegment`. Mapping dans `SEGMENTS` (script).
+- **RGPD** : soft opt-in (désinscription 1-clic dans chaque lettre) ; les désinscrits
+  Brevo sont **rapatriés** dans Twenty (`newsletterOptOut`) — jamais re-sollicités.
+- **Gabarits** : `newsletters/*.html` (Collectivités / Pros / Écosystème).
+
+```bash
+# env : TWENTY_API_KEY + BREVO_API_KEY (+ BREVO_SENDER_EMAIL). cf. .env.example
+python scripts/sync_twenty_brevo.py plan       # dry-run : compte par liste, 0 écriture
+python scripts/sync_twenty_brevo.py all         # cron : reconcile (opt-out) puis sync
+python scripts/sync_twenty_brevo.py drafts      # (re)crée les 3 brouillons de campagne
+python scripts/enrich_newsletter_contacts.py --apply   # enrichit Twenty (contacts validés)
+```
+
+Le cron exécute `all` (jamais `drafts`, qui reste manuel).
 
 ## Pilotage par agents (MCP)
 
