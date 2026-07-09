@@ -61,7 +61,7 @@ Cart@DS, Oxalis, NetADS, Next'ADS, openADS…
 |-------|------|--------|-------|
 | type | select | monitoring | révision PLUi \| marché public \| post LinkedIn \| refus dossier |
 | date | date | monitoring | |
-| entites_liees | relation (polymorphe) | monitoring | Collectivité / Cabinet / Éditeur ADS… |
+| entites_liees | relation (polymorphe) | monitoring | Collectivité / Cabinet / Éditeur ADS / Person / Company… |
 | action_suggeree | text | scoring | brief / appel / réponse AO |
 | statut | select | workflow | nouveau \| traité \| ignoré |
 
@@ -86,7 +86,7 @@ Chaque ligne = un cabinet intervenant pour une collectivité.
 - Collectivité 1..n PLUi · Collectivité n..1 Éditeur ADS ✅
 - Cabinet n..n Collectivité — **via objet Intervention** (1dhk) ✅
 - Éditeur ADS n..n Collectivité (clientes) — couvert par l'inverse de Collectivité n..1 Éditeur ADS ✅
-- Signal n..1 {Collectivité, Cabinet, Éditeur ADS, Deal} (polymorphe = relations nullables) ✅ (1dhk)
+- Signal n..1 {Collectivité, Cabinet, Éditeur ADS, Deal, **Person, Company**} (polymorphe = relations nullables) ✅ (1dhk ; Person/Company ajoutés pour le sourcing LinkedIn — un signal « Post LinkedIn » se relie au contact)
 - People n..1 {Collectivité, Cabinet, Éditeur ADS, Company} ✅ (1dhk)
 - Deal n..1 {Collectivité, Cabinet} + `segment` ✅ (1dhk)
 

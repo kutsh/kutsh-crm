@@ -103,6 +103,11 @@ RELATIONS = [
  ("signal","cabinet","Cabinet","cabinet","Signaux","IconRulerMeasure"),
  ("signal","editeurAds","Éditeur ADS","editeurAds","Signaux","IconDatabase"),
  ("signal","opportunity","Opportunité","opportunity","Signaux","IconTargetArrow"),
+ # Signal n..1 {Person, Company} — un signal peut concerner un contact (ex. post
+ # LinkedIn d'une personne) ou une organisation générique. Rend le sourcing LinkedIn
+ # navigable depuis la fiche (import de prospects par le bot Kutsh).
+ ("signal","person","Contact","person","Signaux","IconUser"),
+ ("signal","company","Société","company","Signaux","IconBuilding"),
 ]
 
 def fetch_objects():
