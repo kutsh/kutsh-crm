@@ -16,9 +16,9 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: write
+      pull-requests: write
+      issues: write
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
@@ -37,10 +37,9 @@ jobs:
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
-
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr:*)'
+          # Le Bash est desactive par defaut. On autorise uniquement la creation de PR
+          # pour que Claude ouvre lui-meme la pull request au lieu de se contenter
+          # d'un lien pre-rempli (comportement par defaut de l'action).
+          claude_args: |
+            --allowedTools "Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*)"
+            --append-system-prompt "Quand tu as pousse des commits sur une nouvelle branche pour repondre a une issue, ouvre toi-meme la pull request avec la commande gh pr create, en ciblant la branche par defaut du depot. Ne te contente pas de fournir un lien de creation pre-rempli. Dans le corps de la PR, ajoute une ligne Closes #N referencant l'issue d'origine. Si une PR existe deja pour cette branche, ne la recree pas."
