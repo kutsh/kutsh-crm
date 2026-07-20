@@ -22,8 +22,17 @@ Principe : changer de CRM = repointer `crm_client.py`. Les données métier ne b
 
 ## Composants
 
-- `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts idempotents métier, pagination). Stdlib pur. Point d'isolation anti-lock-in + socle des scripts batch.
-- `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (façade CLI de `crm_export`, cf. ci-dessous), `sync_twenty_brevo.py` + `configure_newsletter_fields.py` + `enrich_newsletter_contacts.py` (newsletter → Brevo, cf. ci-dessous).
+- `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts idempotents métier, pagination). Stdlib pur. Point d'isolation anti-lock-in + socle des scripts batch. **Seul client Twenty de l'écosystème** : kutsh-data en portait une copie divergente, supprimée (kata `jnnf`, cf. [`decisions/2026-07-21-client-twenty-unique.md`](decisions/2026-07-21-client-twenty-unique.md)).
+- `crm_export.py`, `crm_brevo.py` — les deux autres modules packagés (snapshot anti lock-in, sync newsletter). Cf. ci-dessous.
+- `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `purge_auto_leads.py`, façades CLI (`export_snapshot.py`, `sync_twenty_brevo.py`) + `configure_newsletter_fields.py` et `enrich_newsletter_contacts.py`.
+- `ops/` — points d'entrée historiques du cron kutsh-prod, rapatriés pour mémoire. Cf. [`ops/README.md`](ops/README.md).
+
+Les trois modules racine (`crm_client`, `crm_export`, `crm_brevo`) constituent le
+wheel ; c'est par eux que les autres services consomment ce dépôt :
+
+```bash
+uv add "kutsh-crm @ git+https://github.com/kutsh/kutsh-crm.git"
+```
 
 ## Snapshot d'export (anti lock-in)
 
@@ -71,20 +80,35 @@ Décision : [`decisions/2026-07-07-crm-brevo-newsletter-sync.md`](decisions/2026
 - **Segmentation** : le segment d'un contact (→ liste Brevo) est déduit de son
   organisation : relation custom (`cabinetId`→Pros, `collectiviteId`→Collectivités,
   `editeurAdsId`→Écosystème), sinon `Company.categorie`, avec **override explicite**
-  par le champ Person `newsletterSegment`. Mapping dans `SEGMENTS` (script).
+  par le champ Person `newsletterSegment`. Mapping dans `SEGMENTS` (`crm_brevo.py`).
 - **RGPD** : soft opt-in (désinscription 1-clic dans chaque lettre) ; les désinscrits
   Brevo sont **rapatriés** dans Twenty (`newsletterOptOut`) — jamais re-sollicités.
 - **Gabarits** : `newsletters/*.html` (Collectivités / Pros / Écosystème).
 
+C'est un **module packagé** (comme `crm_export`), appelable depuis un orchestrateur :
+
+```python
+from crm_brevo import run
+summary = run("all")     # {"reconcile": {...}, "sync": {...}}
+```
+
 ```bash
 # env : TWENTY_API_KEY + BREVO_API_KEY (+ BREVO_SENDER_EMAIL). cf. .env.example
-python scripts/sync_twenty_brevo.py plan       # dry-run : compte par liste, 0 écriture
-python scripts/sync_twenty_brevo.py all         # cron : reconcile (opt-out) puis sync
+python -m crm_brevo plan                       # dry-run : compte par liste, 0 écriture
+python -m crm_brevo all                         # reconcile (opt-out) puis sync
 python scripts/sync_twenty_brevo.py drafts      # (re)crée les 3 brouillons de campagne
 python scripts/enrich_newsletter_contacts.py --apply   # enrichit Twenty (contacts validés)
 ```
 
-Le cron exécute `all` (jamais `drafts`, qui reste manuel).
+`scripts/sync_twenty_brevo.py` reste une façade CLI équivalente, à ceci près que
+son `ensure` joue d'abord `configure_newsletter_fields.py` (migration de schéma
+Twenty, une fois pour toutes) — le module, lui, ne touche qu'à Brevo.
+
+`all` est l'enchaînement destiné à l'orchestrateur (jamais `drafts`, qui reste
+manuel et a besoin de `newsletters/*.html`, absent du wheel). Le deployment
+Prefect `crm-brevo-sync` (kutsh-data) est **sans cron** : il se déclenche à la
+main. Un envoi vers un service externe ne se met pas en pilote automatique par
+effet de bord d'un chantier d'orchestration — c'est une décision à part.
 
 ## Pilotage par agents (MCP)
 

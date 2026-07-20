@@ -4,6 +4,16 @@
 Point d'isolation unique vis-à-vis du CRM (cf. cadrage : « si on change de CRM,
 on repointe crm_client.py »). S'appuie sur l'API REST de Twenty (/rest/*).
 
+**Module packagé, et seul client Twenty de l'écosystème Kutsh** (kata `jnnf`) :
+kutsh-data en portait une réimplémentation divergente sous `scripts/crm_client.py`,
+supprimée au profit de ce module. Les consommateurs l'installent :
+
+    uv add "kutsh-crm @ git+https://github.com/kutsh/kutsh-crm.git"
+
+Toute évolution du contrat REST se fait donc ici, une fois — ce qui ne marchait
+plus quand il y avait deux copies (un correctif de retry réseau n'avait atterri
+que sur l'une des deux).
+
 Env : TWENTY_API_KEY (requis), TWENTY_BASE_URL (def https://twenty.kutsh.fr).
 Sans dépendances externes (urllib).
 
@@ -11,7 +21,8 @@ Conventions Twenty utiles :
 - objets pluriels : people, companies, opportunities, collectivites, pluis,
   cabinets, editeurAds, signals.
 - relations : exposées en clé `<relation>Id` (ex. editeurAdsId, pluiId).
-- SELECT : valeur en UPPER_SNAKE (ex. COMMUNE, RNU, ELEVEE).
+- SELECT : valeur en UPPER_SNAKE (ex. COMMUNE, RNU, ELEVEE) ; les valeurs
+  admises de `typeSignal` sont listées dans TYPE_SIGNAL_VALUES.
 - person.name est composite : {"firstName": ..., "lastName": ...}.
 """
 
@@ -28,6 +39,33 @@ DEFAULT_BASE = "https://twenty.kutsh.fr"
 _RATE_LIMIT = 70
 _RATE_WINDOW = 60.0
 _calls: deque[float] = deque()
+
+# Valeurs autorisées du SELECT `typeSignal` côté Twenty (cf. docs/schema.md).
+# Un SELECT refuse toute valeur hors liste : mieux vaut lever ici, avec la liste
+# attendue, qu'aller chercher la cause dans un HTTP 400 tronqué à 300 caractères.
+TYPE_SIGNAL_VALUES = frozenset(
+    {
+        "REVISION_PLUI",
+        "MARCHE_PUBLIC",
+        "POST_LINKEDIN",
+        "REFUS_DOSSIER",
+        "RENOUVELLEMENT_ADS",
+    }
+)
+
+
+def _retry_after(headers) -> float | None:
+    """Délai du header `Retry-After`, en secondes, ou None s'il est inutilisable.
+
+    Twenty renvoie un entier de secondes. La RFC autorise aussi une date HTTP,
+    qu'on ne sait pas lire — on retombe alors sur le backoff par défaut plutôt
+    que de repartir immédiatement.
+    """
+    raw = headers.get("Retry-After") if headers else None
+    try:
+        return float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 def _throttle() -> None:
@@ -83,24 +121,19 @@ class TwentyClient:
             except urllib.error.HTTPError as e:
                 # 429 (rate limit) ou 5xx transitoire → backoff puis retry.
                 if e.code in (429, 502, 503, 504) and attempt < 5:
-                    retry_after = e.headers.get("Retry-After") if e.headers else None
-                    delay = (
-                        float(retry_after)
-                        if retry_after and retry_after.isdigit()
-                        else 20.0
-                    )
-                    time.sleep(delay)
+                    delay = _retry_after(e.headers)
+                    time.sleep(delay if delay is not None else 20.0)
                     continue
                 raise TwentyError(
                     f"{method} {path} -> HTTP {e.code}: {e.read().decode()[:300]}"
-                )
+                ) from e
             except (urllib.error.URLError, TimeoutError) as e:
                 # Erreur réseau transitoire (timeout SSL, connexion coupée) sur un run
                 # long → backoff puis retry, sinon un simple blip tue tout le batch.
                 if attempt < 5:
                     time.sleep(5)
                     continue
-                raise TwentyError(f"{method} {path} -> erreur réseau: {e}")
+                raise TwentyError(f"{method} {path} -> erreur réseau: {e}") from e
         raise TwentyError(f"{method} {path} -> abandon après retries (réseau/rate limit ?)")
 
     # --- CRUD générique ---
@@ -226,6 +259,10 @@ class TwentyClient:
         statut: str = "NOUVEAU",
         **fields,
     ) -> dict:
+        if type_signal not in TYPE_SIGNAL_VALUES:
+            raise TwentyError(
+                f"typeSignal invalide: {type_signal!r} (attendu {sorted(TYPE_SIGNAL_VALUES)})"
+            )
         data = {"name": name, "typeSignal": type_signal, "statut": statut, **fields}
         if action_suggeree:
             data["actionSuggeree"] = action_suggeree
