@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Tests du contrôle de santé des snapshots CRM (stdlib pur : `python -m unittest`).
 
-Les deux fixtures sont les manifestes RÉELS de l'incident 2026-07-20 :
-- `manifest-degrade-2026-07-12.json` : 12 objets sur 13 en HTTP 429, 5
-  enregistrements au total. Le script d'alors imprimait « OK snapshot » et
-  sortait en 0 — trois semaines de backups vides sans alerte.
-- `manifest-sain-2026-07-20.json` : le run d'après correction, 48 584
-  enregistrements, dont deux objets légitimement à 0 (editeursAds,
-  interventions) qui ne doivent PAS déclencher de faux positif.
+Les fixtures reproduisent la STRUCTURE exacte des manifestes de l'incident
+2026-07-20 — mêmes objets, mêmes erreurs, mêmes objets légitimement à zéro —
+mais avec des **effectifs synthétiques** : ce dépôt est public et les
+volumétries du CRM n'ont pas à y figurer. La valeur de non-régression ne dépend
+que de la structure.
+
+- `manifest-degrade-2026-07-12.json` : 12 objets sur 13 en HTTP 429. Le script
+  d'alors imprimait « OK snapshot » et sortait en 0 — trois semaines de backups
+  vides sans alerte.
+- `manifest-sain-2026-07-20.json` : le run d'après correction, dont deux objets
+  légitimement à 0 (editeursAds, interventions) qui ne doivent PAS déclencher de
+  faux positif.
 """
 from __future__ import annotations
 import json
@@ -48,7 +53,7 @@ class TestIncidentReel(unittest.TestCase):
         self.assertEqual(warnings, [])
 
     def test_zeros_legitimes_ne_sont_pas_des_faux_positifs(self):
-        """editeursAds et interventions valent 0 dans les deux snapshots réels."""
+        """editeursAds et interventions sont légitimement vides, sans clé `error`."""
         sain = fixture("manifest-sain-2026-07-20.json")
         self.assertEqual(sain["objects"]["editeursAds"]["count"], 0)
         errors, _ = check_health(sain, sain)
@@ -61,8 +66,8 @@ class TestIncidentReel(unittest.TestCase):
             fixture("manifest-sain-2026-07-20.json"),
         )
         # 12 échecs de lecture + les objets peuplés retombés à 0.
-        self.assertTrue(any("43187" in e and "cabinets" in e for e in errors))
-        self.assertTrue(any("452" in e and "people" in e for e in errors))
+        self.assertTrue(any("1234" in e and "cabinets" in e for e in errors))
+        self.assertTrue(any("321" in e and "people" in e for e in errors))
 
 
 class TestReglesDeSante(unittest.TestCase):
@@ -80,10 +85,10 @@ class TestReglesDeSante(unittest.TestCase):
     def test_objet_qui_se_vide_est_fatal(self):
         errors, _ = check_health(
             manifest({"people": {"count": 0}, "notes": {"count": 3}}),
-            manifest({"people": {"count": 452}, "notes": {"count": 3}}, "2026-07-20"),
+            manifest({"people": {"count": 321}, "notes": {"count": 3}}, "2026-07-20"),
         )
         self.assertEqual(len(errors), 1)
-        self.assertIn("452", errors[0])
+        self.assertIn("321", errors[0])
         self.assertIn("2026-07-20", errors[0])
 
     def test_zero_reste_zero_sans_erreur(self):
@@ -97,12 +102,12 @@ class TestReglesDeSante(unittest.TestCase):
     def test_grosse_baisse_avertit_sans_bloquer(self):
         """Une purge légitime (purge_auto_leads) ne doit pas faire échouer le backup."""
         errors, warnings = check_health(
-            manifest({"cabinets": {"count": 4000}}),
-            manifest({"cabinets": {"count": 43187}}, "2026-07-20"),
+            manifest({"cabinets": {"count": 100}}),
+            manifest({"cabinets": {"count": 1234}}, "2026-07-20"),
         )
         self.assertEqual(errors, [])
         self.assertEqual(len(warnings), 1)
-        self.assertIn("-91 %", warnings[0])
+        self.assertIn("-92 %", warnings[0])
 
     def test_petit_objet_en_baisse_reste_silencieux(self):
         """Sous 100 enregistrements, les variations sont trop bruitées pour alerter."""
@@ -124,7 +129,7 @@ class TestReglesDeSante(unittest.TestCase):
 class TestPreviousManifest(unittest.TestCase):
     def test_lit_le_manifeste_de_l_archive_la_plus_recente(self):
         with tempfile.TemporaryDirectory() as base:
-            for stamp, count in (("2026-07-05", 1), ("2026-07-20", 452)):
+            for stamp, count in (("2026-07-05", 1), ("2026-07-20", 321)):
                 work = os.path.join(base, stamp)
                 os.makedirs(work)
                 with open(os.path.join(work, "manifest.json"), "w") as fh:
@@ -134,7 +139,7 @@ class TestPreviousManifest(unittest.TestCase):
             found = previous_manifest(base)
             self.assertIsNotNone(found)
             self.assertEqual(found["snapshot"], "2026-07-20")
-            self.assertEqual(found["objects"]["people"]["count"], 452)
+            self.assertEqual(found["objects"]["people"]["count"], 321)
 
     def test_repertoire_sans_archive(self):
         with tempfile.TemporaryDirectory() as base:
