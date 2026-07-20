@@ -3,15 +3,15 @@
   "base_url": "https://twenty.kutsh.fr",
   "objects": {
     "cabinets": {
-      "count": 43187,
+      "count": 1234,
       "custom": true
     },
     "collectivites": {
-      "count": 4618,
+      "count": 456,
       "custom": true
     },
     "companies": {
-      "count": 207,
+      "count": 78,
       "custom": false
     },
     "dashboards": {
@@ -27,15 +27,15 @@
       "custom": true
     },
     "notes": {
-      "count": 26,
+      "count": 21,
       "custom": false
     },
     "opportunities": {
-      "count": 17,
+      "count": 9,
       "custom": false
     },
     "people": {
-      "count": 452,
+      "count": 321,
       "custom": false
     },
     "pluis": {
@@ -43,11 +43,11 @@
       "custom": true
     },
     "signals": {
-      "count": 59,
+      "count": 43,
       "custom": true
     },
     "tasks": {
-      "count": 9,
+      "count": 6,
       "custom": false
     },
     "workflows": {

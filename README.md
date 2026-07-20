@@ -42,12 +42,12 @@ Une chute de plus de moitié sur un objet d'au moins 100 enregistrements est
 signalée en `ATTENTION` sur stderr sans faire échouer le run : une purge
 légitime (`purge_auto_leads.py`) en produit.
 
-> Incident 2026-07-20 : les snapshots du 28/06, 05/07 et 12/07 ne contenaient que
-> 5 enregistrements sur ~48 000, chaque objet ayant échoué en HTTP 429. Le
-> manifeste enregistrait déjà ces erreurs, mais le script ne les relisait pas :
-> il imprimait « OK snapshot » et sortait en 0. Trois semaines de backups
-> inexploitables sans la moindre alerte. Les manifestes réels de l'incident
-> servent aujourd'hui de fixtures de non-régression.
+> Incident 2026-07-20 : pendant trois semaines, les snapshots n'ont contenu qu'un
+> seul objet sur treize — les douze autres échouaient en HTTP 429. Le manifeste
+> enregistrait déjà ces erreurs, mais le script ne les relisait pas : il
+> imprimait « OK snapshot » et sortait en 0. Trois semaines de backups
+> inexploitables sans la moindre alerte. Les fixtures de test reproduisent la
+> structure de ces manifestes (effectifs synthétiques, dépôt public).
 
 ```bash
 python -m unittest discover -s tests    # stdlib pur, aucune dépendance

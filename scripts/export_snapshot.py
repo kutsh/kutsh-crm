@@ -10,10 +10,10 @@ Un snapshot dégradé est archivé quand même (on ne jette pas de la donnée), 
 le script sort en **code retour non nul** et la rétention est suspendue — pour
 qu'un backup vide ne soit ni silencieux ni capable d'évincer les bons.
 
-Incident 2026-07-20 : les snapshots du 28/06, 05/07 et 12/07 ne contenaient que
-5 enregistrements sur ~48 000, chaque objet ayant échoué en HTTP 429. Le
-manifeste enregistrait déjà ces erreurs, mais personne ne les relisait : le
-script imprimait « OK snapshot » et sortait en 0. Trois semaines de backups
+Incident 2026-07-20 : pendant trois semaines, les snapshots n'ont contenu qu'un
+seul objet sur treize — les douze autres échouaient en HTTP 429. Le manifeste
+enregistrait déjà ces erreurs, mais personne ne les relisait : le script
+imprimait « OK snapshot » et sortait en 0. Trois semaines de backups
 inexploitables, sans la moindre alerte.
 
 Usage : TWENTY_API_KEY=… python scripts/export_snapshot.py [--out DIR] [--keep N]
