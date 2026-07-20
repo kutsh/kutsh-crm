@@ -1,0 +1,58 @@
+{
+  "snapshot": "2026-07-20",
+  "base_url": "https://twenty.kutsh.fr",
+  "objects": {
+    "cabinets": {
+      "count": 43187,
+      "custom": true
+    },
+    "collectivites": {
+      "count": 4618,
+      "custom": true
+    },
+    "companies": {
+      "count": 207,
+      "custom": false
+    },
+    "dashboards": {
+      "count": 3,
+      "custom": false
+    },
+    "editeursAds": {
+      "count": 0,
+      "custom": true
+    },
+    "interventions": {
+      "count": 0,
+      "custom": true
+    },
+    "notes": {
+      "count": 26,
+      "custom": false
+    },
+    "opportunities": {
+      "count": 17,
+      "custom": false
+    },
+    "people": {
+      "count": 452,
+      "custom": false
+    },
+    "pluis": {
+      "count": 5,
+      "custom": true
+    },
+    "signals": {
+      "count": 59,
+      "custom": true
+    },
+    "tasks": {
+      "count": 9,
+      "custom": false
+    },
+    "workflows": {
+      "count": 1,
+      "custom": false
+    }
+  }
+}
