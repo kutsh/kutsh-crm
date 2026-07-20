@@ -25,6 +25,34 @@ Principe : changer de CRM = repointer `crm_client.py`. Les données métier ne b
 - `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts idempotents métier, pagination). Stdlib pur. Point d'isolation anti-lock-in + socle des scripts batch.
 - `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (snapshot hebdo, déployé en cron serveur), `sync_twenty_brevo.py` + `configure_newsletter_fields.py` + `enrich_newsletter_contacts.py` (newsletter → Brevo, cf. ci-dessous).
 
+## Snapshot d'export (anti lock-in)
+
+`scripts/export_snapshot.py` dumpe tous les objets du CRM en JSONL, archive en
+`.tar.gz` daté et applique une rétention. Déployé en cron hebdomadaire sur le
+serveur.
+
+**Contrat de sortie** — un backup vide doit être bruyant :
+
+| Code | Situation |
+|---|---|
+| `0` | snapshot sain ; rétention appliquée |
+| `1` | snapshot **dégradé** : un objet illisible, un objet passé de N>0 à 0 depuis le snapshot précédent, ou total à 0. L'archive est **conservée** (on ne jette pas de la donnée) mais la **rétention est suspendue** — un backup dégradé ne peut pas évincer les bons. |
+
+Une chute de plus de moitié sur un objet d'au moins 100 enregistrements est
+signalée en `ATTENTION` sur stderr sans faire échouer le run : une purge
+légitime (`purge_auto_leads.py`) en produit.
+
+> Incident 2026-07-20 : les snapshots du 28/06, 05/07 et 12/07 ne contenaient que
+> 5 enregistrements sur ~48 000, chaque objet ayant échoué en HTTP 429. Le
+> manifeste enregistrait déjà ces erreurs, mais le script ne les relisait pas :
+> il imprimait « OK snapshot » et sortait en 0. Trois semaines de backups
+> inexploitables sans la moindre alerte. Les manifestes réels de l'incident
+> servent aujourd'hui de fixtures de non-régression.
+
+```bash
+python -m unittest discover -s tests    # stdlib pur, aucune dépendance
+```
+
 ## Newsletter → Brevo
 
 Diffusion des lettres d'information segmentées via Brevo, alimentées depuis Twenty.

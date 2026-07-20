@@ -1,0 +1,58 @@
+{
+  "snapshot": "2026-07-12",
+  "base_url": "https://twenty.kutsh.fr",
+  "objects": {
+    "cabinets": {
+      "error": "GET /rest/cabinets -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": true
+    },
+    "collectivites": {
+      "error": "GET /rest/collectivites -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": true
+    },
+    "companies": {
+      "error": "GET /rest/companies -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    },
+    "dashboards": {
+      "error": "GET /rest/dashboards -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    },
+    "editeursAds": {
+      "error": "GET /rest/editeursAds -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": true
+    },
+    "interventions": {
+      "error": "GET /rest/interventions -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": true
+    },
+    "notes": {
+      "error": "GET /rest/notes -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    },
+    "opportunities": {
+      "error": "GET /rest/opportunities -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    },
+    "people": {
+      "error": "GET /rest/people -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    },
+    "pluis": {
+      "count": 5,
+      "custom": true
+    },
+    "signals": {
+      "error": "GET /rest/signals -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": true
+    },
+    "tasks": {
+      "error": "GET /rest/tasks -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    },
+    "workflows": {
+      "error": "GET /rest/workflows -> HTTP 429: {\"statusCode\":429,\"error\":\"HttpException\",\"messages\":[\"Limit reached (100 tokens per 60000 ms)\"]}",
+      "custom": false
+    }
+  }
+}
