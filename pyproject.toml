@@ -9,7 +9,7 @@ dependencies = []  # crm_client = stdlib pur (urllib)
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# Modules packagés → `import crm_client` / `import crm_export` après installation.
+# Modules packagés → `import crm_client` / `crm_export` / `crm_brevo` après installation.
 # Consommation depuis un autre service Python :
 #   uv add "kutsh-crm @ git+https://github.com/kutsh/kutsh-crm.git"
 #
@@ -17,4 +17,4 @@ build-backend = "hatchling.build"
 # et embarque tout fichier homonyme trouvé plus bas (un worktree `.claude/` non
 # suivi par git suffisait à glisser un doublon de crm_client.py dans le wheel).
 [tool.hatch.build.targets.wheel]
-include = ["/crm_client.py", "/crm_export.py"]
+include = ["/crm_client.py", "/crm_export.py", "/crm_brevo.py"]
