@@ -23,13 +23,23 @@ Principe : changer de CRM = repointer `crm_client.py`. Les données métier ne b
 ## Composants
 
 - `crm_client.py` — abstraction de l'API Twenty (CRUD, upserts idempotents métier, pagination). Stdlib pur. Point d'isolation anti-lock-in + socle des scripts batch.
-- `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (snapshot hebdo, déployé en cron serveur), `sync_twenty_brevo.py` + `configure_newsletter_fields.py` + `enrich_newsletter_contacts.py` (newsletter → Brevo, cf. ci-dessous).
+- `scripts/` — `import_prospects.py`, `import_campfire_contacts.py`, `configure_pipeline.py`, `export_snapshot.py` (façade CLI de `crm_export`, cf. ci-dessous), `sync_twenty_brevo.py` + `configure_newsletter_fields.py` + `enrich_newsletter_contacts.py` (newsletter → Brevo, cf. ci-dessous).
 
 ## Snapshot d'export (anti lock-in)
 
-`scripts/export_snapshot.py` dumpe tous les objets du CRM en JSONL, archive en
-`.tar.gz` daté et applique une rétention. Déployé en cron hebdomadaire sur le
-serveur.
+`crm_export.py` dumpe tous les objets du CRM en JSONL, archive en `.tar.gz` daté
+et applique une rétention.
+
+C'est un **module packagé** (comme `crm_client`), pour qu'un orchestrateur puisse
+l'appeler sans qu'on ait à copier un fichier sur une machine :
+
+```python
+from crm_export import run
+archive, healthy = run(out_dir, keep=12, stamp="2026-07-20")
+```
+
+`scripts/export_snapshot.py` reste une façade CLI équivalente, et
+`python -m crm_export` fonctionne aussi.
 
 **Contrat de sortie** — un backup vide doit être bruyant :
 
