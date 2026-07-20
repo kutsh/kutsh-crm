@@ -22,8 +22,8 @@ import tarfile
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
-from export_snapshot import check_health, previous_manifest  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from crm_export import check_health, previous_manifest  # noqa: E402
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 
@@ -185,11 +185,11 @@ class FakeClient:
 
 class TestRunBoutEnBout(unittest.TestCase):
     def setUp(self):
-        import export_snapshot
+        import crm_export
 
-        self.mod = export_snapshot
-        self.vrai_client = export_snapshot.TwentyClient
-        self.addCleanup(setattr, export_snapshot, "TwentyClient", self.vrai_client)
+        self.mod = crm_export
+        self.vrai_client = crm_export.TwentyClient
+        self.addCleanup(setattr, crm_export, "TwentyClient", self.vrai_client)
 
     def _run(self, plans, base, stamp, keep=2):
         self.mod.TwentyClient = lambda: FakeClient(plans)
