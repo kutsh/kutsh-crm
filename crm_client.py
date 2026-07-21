@@ -50,6 +50,12 @@ TYPE_SIGNAL_VALUES = frozenset(
         "POST_LINKEDIN",
         "REFUS_DOSSIER",
         "RENOUVELLEMENT_ADS",
+        # Lead entrant qualifié par kutsh-data/scripts/qualify_leads.py. Un Signal
+        # plutôt qu'une opportunité : le score trie et présente, il n'engage pas.
+        # Le Deal naît d'une décision humaine — la routine précédente convertissait
+        # une classification en engagement commercial et a rempli le pipeline à
+        # 96 % de deals synthétiques.
+        "LEAD_QUALIFIE",
     }
 )
 
