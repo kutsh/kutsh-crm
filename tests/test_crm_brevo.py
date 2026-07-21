@@ -16,7 +16,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import crm_brevo  # noqa: E402
-from crm_brevo import SEGMENTS, gather  # noqa: E402
+from crm_brevo import CONTACT_ATTRIBUTES, SEGMENTS, BrevoError, ensure_attributes, gather  # noqa: E402
 
 
 class FakeClient:
@@ -183,6 +183,71 @@ class TestDryRun(unittest.TestCase):
         buckets, _, _ = gather(c, with_names=False)
         self.assertEqual(buckets["PROS"][0]["company"], "")
         self.assertNotIn("cabinets", c.appels)
+
+
+class FakeBrevo:
+    """Brevo en dur pour `ensure_attributes` : schéma d'attributs + création.
+
+    `refuse` reproduit le comportement qui a produit l'incident : l'API accepte
+    le POST, renvoie 2xx, et ne stocke rien.
+    """
+
+    def __init__(self, existants=(), refuse=False):
+        self._attrs = list(existants)
+        self.refuse = refuse
+        self.crees: list[str] = []
+
+    def attributes(self):
+        return [{"name": n} for n in self._attrs]
+
+    def create_attribute(self, name, type_="text"):
+        self.crees.append(name)
+        if not self.refuse:
+            self._attrs.append(name)
+
+
+class TestEnsureAttributes(unittest.TestCase):
+    """Le défaut du 2026-07-21 : `SOURCE` et `SEGMENT` étaient envoyés par le
+    sync mais absents du schéma Brevo. L'import a rendu un `processId`, le
+    processus est passé `completed`, et les 376 contacts ont été créés avec ces
+    deux attributs vides — sans une ligne d'erreur nulle part."""
+
+    def test_cree_les_attributs_manquants(self):
+        bv = FakeBrevo(existants=["PRENOM", "NOM"])
+        self.assertEqual(sorted(ensure_attributes(bv)), ["SEGMENT", "SOURCE"])
+        self.assertEqual(sorted(bv.crees), ["SEGMENT", "SOURCE"])
+
+    def test_idempotent_quand_tout_existe(self):
+        bv = FakeBrevo(existants=list(CONTACT_ATTRIBUTES))
+        self.assertEqual(ensure_attributes(bv), [])
+        self.assertEqual(bv.crees, [])
+
+    def test_leve_si_brevo_accepte_sans_stocker(self):
+        """Le garde-fou : on relit le schéma au lieu de croire le code retour.
+
+        Sans cette relecture, un POST accepté mais sans effet laisserait repartir
+        exactement le même import silencieusement amputé.
+        """
+        bv = FakeBrevo(existants=["PRENOM", "NOM"], refuse=True)
+        with self.assertRaises(BrevoError) as ctx:
+            ensure_attributes(bv)
+        self.assertIn("SEGMENT", str(ctx.exception))
+        self.assertIn("SOURCE", str(ctx.exception))
+
+    def test_les_attributs_envoyes_sont_tous_declares(self):
+        """Le lien qui manquait, vérifié sur le VRAI payload du sync.
+
+        Ce que `contact_attributes` pose doit être dans la liste que
+        `ensure_attributes` garantit. Ajouter un attribut au payload sans le
+        déclarer reproduirait le défaut à l'identique — et tout aussi
+        silencieusement, puisque Brevo ne s'en plaint pas.
+        """
+        envoyes = crm_brevo.contact_attributes(
+            {"first": "Ada", "last": "L", "email": "a@b.fr"}, "PROS"
+        )
+        self.assertEqual(set(envoyes), set(CONTACT_ATTRIBUTES))
+        self.assertEqual(envoyes["SEGMENT"], "PROS")
+        self.assertEqual(envoyes["SOURCE"], "twenty")
 
 
 class TestConfiguration(unittest.TestCase):

@@ -7,7 +7,7 @@ organisation (Company) dans Twenty. Mapping dans CATEGORIE_TO_SEGMENT ci-dessous
 
 Sous-commandes :
   plan        Dry-run : compte les contacts par segment, n'écrit rien (Twenty ni Brevo).
-  ensure      Idempotent : crée le dossier + les listes côté Brevo.
+  ensure      Idempotent : crée les attributs de contact + le dossier + les listes côté Brevo.
   sync        Pousse les contacts dans les listes Brevo (upsert, saute les désinscrits).
   reconcile   Rapatrie les désinscrits/blacklistés Brevo dans Twenty (newsletterOptOut).
   drafts      Crée les 3 brouillons de campagne dans Brevo depuis newsletters/*.html.
@@ -93,6 +93,12 @@ RELATION_ROUTING = [
 ]
 
 BREVO = "https://api.brevo.com/v3"
+# Attributs de contact posés par `do_sync`. Ils doivent exister dans le schéma
+# Brevo AVANT l'import, sans quoi ils sont silencieusement jetés (cf.
+# `ensure_attributes`). `PRENOM`/`NOM` y figurent aussi : ils existent déjà sur
+# le compte, mais la liste n'a d'intérêt que si elle est exhaustive — sur un
+# compte neuf, c'est elle qui décrit ce dont le sync a besoin.
+CONTACT_ATTRIBUTES = {"PRENOM": "text", "NOM": "text", "SOURCE": "text", "SEGMENT": "text"}
 # Le corps HTML des campagnes vit dans le dépôt, pas dans le wheel : `drafts` est
 # une commande d'atelier, pas un job récurrent. Surchargeable pour le cas où le
 # module tournerait ailleurs que depuis un checkout.
@@ -190,6 +196,13 @@ class Brevo:
             if len(contacts) < 500:
                 return
             offset += 500
+
+    # --- attributs de contact ---
+    def attributes(self) -> list[dict]:
+        return self._req("GET", "/contacts/attributes").get("attributes", []) or []
+
+    def create_attribute(self, name: str, type_: str = "text") -> None:
+        self._req("POST", f"/contacts/attributes/normal/{name}", {"type": type_})
 
     def senders(self) -> list[dict]:
         return self._req("GET", "/senders").get("senders", []) or []
@@ -348,7 +361,48 @@ def ensure_lists(bv: Brevo) -> dict:
     return ids
 
 
+def ensure_attributes(bv: Brevo) -> list[str]:
+    """Déclare dans Brevo les attributs posés par le sync. Retourne ceux créés.
+
+    Brevo n'accepte QUE les attributs déclarés dans le schéma du compte. Un
+    attribut inconnu est **ignoré à l'import sans la moindre erreur** : l'API
+    rend un `processId`, le processus passe `completed`, et la valeur disparaît.
+
+    C'est arrivé au premier run réel (2026-07-21) : les 376 contacts sont partis
+    avec `SOURCE` et `SEGMENT` vides, ni le log du flow ni l'état du run ne
+    permettant de le voir. Seule une relecture de l'API Brevo l'a montré.
+    """
+    existants = {a.get("name") for a in bv.attributes()}
+    crees = [nom for nom in CONTACT_ATTRIBUTES if nom not in existants]
+    for nom in crees:
+        bv.create_attribute(nom, CONTACT_ATTRIBUTES[nom])
+        print(f"  attribut de contact « {nom} » créé")
+
+    # Relecture systématique : on ne se fie pas au code retour du POST, puisque
+    # le mode d'échec qu'on ferme est précisément « Brevo accepte sans stocker ».
+    manquants = sorted(set(CONTACT_ATTRIBUTES) - {a.get("name") for a in bv.attributes()})
+    if manquants:
+        raise BrevoError(
+            f"attribut(s) de contact absent(s) du schéma Brevo après création : {manquants}. "
+            "Un import les jetterait en silence — on s'arrête avant d'écrire."
+        )
+    return crees
+
+
+def contact_attributes(ct: dict, seg: str) -> dict:
+    """Attributs Brevo d'un contact. Ses clés DOIVENT être dans CONTACT_ATTRIBUTES.
+
+    Isolée du corps de `do_sync` pour que le test puisse vérifier ce lien sur le
+    vrai payload : ajouter un attribut ici sans le déclarer là-bas reproduirait
+    l'incident du 2026-07-21 à l'identique, et tout aussi silencieusement.
+    """
+    return {"PRENOM": ct["first"], "NOM": ct["last"], "SOURCE": "twenty", "SEGMENT": seg}
+
+
 def do_sync(c: TwentyClient, bv: Brevo, limit: int | None) -> dict:
+    # AVANT l'import, pas après : un attribut non déclaré est jeté en silence,
+    # et l'import est la seule opération qui en pose.
+    ensure_attributes(bv)
     list_ids = ensure_lists(bv)
     # with_names=False : on saute la récupération des noms d'organisations custom
     # (inutile à l'envoi) — le gather reste rapide même avec des centaines de contacts.
@@ -358,9 +412,7 @@ def do_sync(c: TwentyClient, bv: Brevo, limit: int | None) -> dict:
     par_segment: dict[str, int] = {}
     for seg, contacts in buckets.items():
         subset = contacts[:limit] if limit else contacts
-        payload = [{"email": ct["email"],
-                    "attributes": {"PRENOM": ct["first"], "NOM": ct["last"],
-                                   "SOURCE": "twenty", "SEGMENT": seg}}
+        payload = [{"email": ct["email"], "attributes": contact_attributes(ct, seg)}
                    for ct in subset]
         pids = bv.import_contacts(list_ids[seg], payload)
         total += len(subset)
@@ -464,7 +516,7 @@ def run(cmd: str, limit: int | None = None) -> dict:
 
     bv = Brevo()
     if cmd == "ensure":
-        return {"listes": ensure_lists(bv)}
+        return {"attributs_crees": ensure_attributes(bv), "listes": ensure_lists(bv)}
     if cmd == "sync":
         return {"sync": do_sync(c, bv, limit)}
     if cmd == "reconcile":

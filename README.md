@@ -83,6 +83,13 @@ Décision : [`decisions/2026-07-07-crm-brevo-newsletter-sync.md`](decisions/2026
   par le champ Person `newsletterSegment`. Mapping dans `SEGMENTS` (`crm_brevo.py`).
 - **RGPD** : soft opt-in (désinscription 1-clic dans chaque lettre) ; les désinscrits
   Brevo sont **rapatriés** dans Twenty (`newsletterOptOut`) — jamais re-sollicités.
+- **Attributs de contact** : `PRENOM`, `NOM`, `SOURCE`, `SEGMENT` (`CONTACT_ATTRIBUTES`),
+  créés dans Brevo par `ensure_attributes` avant tout import. ⚠️ Brevo n'accepte que
+  les attributs **déclarés dans le schéma du compte** et **jette les autres en
+  silence** : l'import rend un `processId`, le processus passe `completed`, la
+  valeur disparaît. Au premier run réel (2026-07-21), 376 contacts sont partis avec
+  `SOURCE` et `SEGMENT` vides sans une ligne d'erreur. D'où la relecture du schéma
+  après création, plutôt qu'une confiance au code retour du POST.
 - **Gabarits** : `newsletters/*.html` (Collectivités / Pros / Écosystème).
 
 C'est un **module packagé** (comme `crm_export`), appelable depuis un orchestrateur :
