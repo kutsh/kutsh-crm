@@ -60,6 +60,47 @@ TYPE_SIGNAL_VALUES = frozenset(
 )
 
 
+def merge_select_options(
+    current: list[dict], wanted: list[dict]
+) -> tuple[list[dict], list[dict]]:
+    """Fusionne les options d'un champ SELECT **sans perdre la valeur des fiches**.
+
+    Twenty identifie une option de SELECT par son `id`. Deux façons de détruire
+    de la donnée avec un simple PATCH de métadonnées :
+
+    1. renvoyer une option existante **sans son `id`** — Twenty ne la met pas à
+       jour, il la remplace, et les fiches qui la portaient perdent leur valeur ;
+    2. **omettre** une option en place — elle est supprimée, même effet.
+
+    D'où cette fusion : on réaligne libellés / couleurs / ordre sur la liste
+    déclarée (`wanted`, l'intention versionnée), en réutilisant les `id` en
+    place, et on conserve en fin de liste les options présentes dans Twenty mais
+    non déclarées, au lieu de les faire disparaître.
+
+    Retourne `(options_à_envoyer, orphelines)`. Les orphelines sont conservées
+    dans le premier élément — le second sert à les **signaler** : une option que
+    plus aucun code ne déclare est soit un reliquat à retirer à la main (après
+    avoir requalifié les fiches), soit le signe que la liste déclarée a dérivé.
+    """
+    par_valeur = {o.get("value"): o for o in current}
+    fusion: list[dict] = []
+    for position, opt in enumerate(wanted):
+        garde = {**opt, "position": position}
+        existante = par_valeur.get(opt["value"])
+        if existante and existante.get("id"):
+            garde["id"] = existante["id"]
+        fusion.append(garde)
+
+    declarees = {o["value"] for o in wanted}
+    orphelines = [o for o in current if o.get("value") not in declarees]
+    for decalage, opt in enumerate(orphelines):
+        fusion.append({
+            **{k: opt[k] for k in ("id", "value", "label", "color") if k in opt},
+            "position": len(wanted) + decalage,
+        })
+    return fusion, orphelines
+
+
 def _retry_after(headers) -> float | None:
     """Délai du header `Retry-After`, en secondes, ou None s'il est inutilisable.
 

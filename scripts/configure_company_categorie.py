@@ -6,9 +6,15 @@ prescripteurs** (fédérations pro, fédérations/associations de collectivités
 réseaux d'élus) des clients/prospects directs. Léger (champ, pas objet dédié) ;
 un objet `Federation` pourra être promu plus tard si le canal devient central.
 
-Idempotent (crée le champ si absent). Env : TWENTY_API_KEY (+ TWENTY_BASE_URL).
+Idempotent (crée le champ si absent) et non destructif : les options existantes
+sont fusionnées par `crm_client.merge_select_options`, qui préserve leurs `id`.
+
+Env : TWENTY_API_KEY (+ TWENTY_BASE_URL).
 """
-import os, json, urllib.request, urllib.error
+import os, sys, json, urllib.request, urllib.error
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from crm_client import merge_select_options  # noqa: E402  # type: ignore[import-not-found]
 
 BASE = os.environ.get("TWENTY_BASE_URL", "https://twenty.kutsh.fr").rstrip("/")
 
@@ -81,19 +87,20 @@ def main():
         })
         print(f"categorie: créé sur Company ({len(CATEGORIE_OPTIONS)} valeurs)")
         return
-    # Champ présent → ajoute les valeurs manquantes EN PRÉSERVANT l'existant
-    # (id + value, sinon les enregistrements déjà typés perdraient leur valeur).
+    # Champ présent → fusion NON destructive : les `id` en place sont réutilisés,
+    # sinon les fiches déjà typées perdraient leur valeur (cf. la docstring de
+    # `merge_select_options`, qui porte cette leçon pour les deux scripts de
+    # configuration — ce fichier en avait sa propre version).
     current = field.get("options") or []
-    have = {o["value"] for o in current}
-    missing = [o for o in CATEGORIE_OPTIONS if o["value"] not in have]
-    if not missing:
-        print("categorie: à jour, rien à ajouter")
-        return
-    keep = [{k: o[k] for k in ("id", "value", "label", "color", "position") if k in o} for o in current]
-    base = max((o.get("position", 0) for o in current), default=-1) + 1
-    add = [{**o, "position": base + i} for i, o in enumerate(missing)]
-    req("PATCH", f"/rest/metadata/fields/{field['id']}", {"options": keep + add})
-    print(f"categorie: +{len(missing)} valeurs ({', '.join(o['value'] for o in missing)})")
+    connues = {o.get("value") for o in current}
+    fusion, orphelines = merge_select_options(current, CATEGORIE_OPTIONS)
+    ajoutees = [o["value"] for o in CATEGORIE_OPTIONS if o["value"] not in connues]
+    req("PATCH", f"/rest/metadata/fields/{field['id']}", {"options": fusion})
+    print(f"categorie: {len(CATEGORIE_OPTIONS)} valeurs synchronisées"
+          + (f", +{len(ajoutees)} nouvelle(s) ({', '.join(ajoutees)})" if ajoutees else ""))
+    if orphelines:
+        print(f"  ⚠️  {len(orphelines)} option(s) hors liste déclarée, CONSERVÉE(S) : "
+              f"{', '.join(o.get('value', '?') for o in orphelines)}")
 
 
 if __name__ == "__main__":

@@ -54,7 +54,8 @@ donc indistinguables du fourre-tout.
   financeurs sont donc suivis en contacts/notes, pas en deals. Si le suivi de
   levée devient un vrai processus (étapes, montants, dates), il faudra soit un
   segment `LEVEE` avec son propre vocabulaire d'étapes, soit un objet dédié —
-  décision reportée jusqu'à ce que le besoin soit réel.
+  décision reportée jusqu'à ce que le besoin soit réel. **Tranchée le jour même**
+  (segment `LEVEE`) : [`2026-07-23-suivi-levee-pipeline.md`](2026-07-23-suivi-levee-pipeline.md).
 - **Une catégorie de plus à maintenir** : le SELECT approche la vingtaine de
   valeurs. Le test de couverture empêche l'oubli côté newsletter, pas la
   prolifération elle-même.

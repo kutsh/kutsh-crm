@@ -220,5 +220,75 @@ class TestThrottle(unittest.TestCase):
         self.assertEqual(len(crm_client._calls), 1)
 
 
+class TestMergeSelectOptions(unittest.TestCase):
+    """Fusion d'options de SELECT — le code qui empêche un PATCH de vider des fiches.
+
+    Ces tests portent sur une fonction pure : c'est justement ce qui les rend
+    utiles, parce que la faute qu'ils décrivent (options renvoyées sans `id`,
+    option omise) ne se voit pas au code retour. Le POST rend 200, la migration
+    passe, et la perte n'apparaît qu'en ouvrant une fiche.
+    """
+
+    EXISTANTES = [
+        {"id": "id-b2g", "value": "B2G", "label": "B2G", "color": "blue", "position": 0},
+        {"id": "id-b2b", "value": "B2B", "label": "B2B", "color": "green", "position": 1},
+    ]
+
+    def test_reutilise_l_id_des_options_deja_en_place(self):
+        fusion, _ = crm_client.merge_select_options(
+            self.EXISTANTES,
+            [{"value": "B2G", "label": "B2G", "color": "blue"},
+             {"value": "B2B", "label": "B2B", "color": "green"}],
+        )
+        self.assertEqual([o["id"] for o in fusion], ["id-b2g", "id-b2b"])
+
+    def test_une_option_nouvelle_part_sans_id(self):
+        """Un `id` inventé côté client serait rejeté ; c'est Twenty qui l'attribue."""
+        fusion, _ = crm_client.merge_select_options(
+            self.EXISTANTES,
+            [{"value": "B2G", "label": "B2G"}, {"value": "LEVEE", "label": "Levée"}],
+        )
+        levee = next(o for o in fusion if o["value"] == "LEVEE")
+        self.assertNotIn("id", levee)
+
+    def test_le_libelle_declare_ecrase_celui_en_place(self):
+        fusion, _ = crm_client.merge_select_options(
+            self.EXISTANTES, [{"value": "B2G", "label": "B2G (marchés publics)"}]
+        )
+        self.assertEqual(fusion[0]["label"], "B2G (marchés publics)")
+        self.assertEqual(fusion[0]["id"], "id-b2g")  # même option, libellé rafraîchi
+
+    def test_une_option_non_declaree_est_conservee_et_signalee(self):
+        """Le cas qui fait perdre de la donnée : omettre = supprimer.
+
+        Une valeur encore portée par des fiches doit survivre à un run du script
+        qui ne la déclare plus — et être signalée, pour qu'on la retire à la main
+        après avoir requalifié les fiches, jamais par effet de bord.
+        """
+        fusion, orphelines = crm_client.merge_select_options(
+            self.EXISTANTES, [{"value": "B2G", "label": "B2G"}]
+        )
+        self.assertEqual([o["value"] for o in orphelines], ["B2B"])
+        conservee = next(o for o in fusion if o["value"] == "B2B")
+        self.assertEqual(conservee["id"], "id-b2b")
+
+    def test_les_positions_suivent_l_ordre_declare_puis_les_orphelines(self):
+        fusion, _ = crm_client.merge_select_options(
+            self.EXISTANTES,
+            [{"value": "LEVEE", "label": "Levée"}, {"value": "B2G", "label": "B2G"}],
+        )
+        self.assertEqual(
+            [(o["value"], o["position"]) for o in fusion],
+            [("LEVEE", 0), ("B2G", 1), ("B2B", 2)],
+        )
+
+    def test_champ_absent_de_twenty_la_liste_declaree_passe_telle_quelle(self):
+        fusion, orphelines = crm_client.merge_select_options(
+            [], [{"value": "SEED", "label": "Seed"}]
+        )
+        self.assertEqual(fusion, [{"value": "SEED", "label": "Seed", "position": 0}])
+        self.assertEqual(orphelines, [])
+
+
 if __name__ == "__main__":
     unittest.main()
