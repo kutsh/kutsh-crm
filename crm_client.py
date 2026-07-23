@@ -60,6 +60,22 @@ TYPE_SIGNAL_VALUES = frozenset(
 )
 
 
+def _refuse_les_virgules(options: list[dict]) -> None:
+    """Twenty rejette tout libellé d'option de SELECT contenant une virgule.
+
+    (« Label must not contain a comma » — les libellés transitent sérialisés en
+    liste séparée par des virgules.) La règle ne se voit qu'à l'exécution, dans
+    un HTTP 400 tronqué qui ne cite qu'une faute à la fois : on préfère lever
+    ici, avec la liste complète, comme pour `TYPE_SIGNAL_VALUES`.
+    """
+    fautifs = [o for o in options if "," in (o.get("label") or "")]
+    if fautifs:
+        detail = " · ".join(f"{o.get('value')}: {o['label']!r}" for o in fautifs)
+        raise TwentyError(
+            f"libellé(s) d'option contenant une virgule, refusé(s) par Twenty — {detail}"
+        )
+
+
 def merge_select_options(
     current: list[dict], wanted: list[dict]
 ) -> tuple[list[dict], list[dict]]:
@@ -83,6 +99,7 @@ def merge_select_options(
     avoir requalifié les fiches), soit le signe que la liste déclarée a dérivé.
     """
     par_valeur = {o.get("value"): o for o in current}
+    _refuse_les_virgules(wanted)
     fusion: list[dict] = []
     for position, opt in enumerate(wanted):
         garde = {**opt, "position": position}

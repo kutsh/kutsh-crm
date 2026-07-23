@@ -282,6 +282,24 @@ class TestMergeSelectOptions(unittest.TestCase):
             [("LEVEE", 0), ("B2G", 1), ("B2B", 2)],
         )
 
+    def test_une_virgule_dans_un_libelle_est_refusee_avant_l_appel(self):
+        """Twenty rejette la virgule dans un libellé d'option (« must not contain a comma »).
+
+        Cas réel : le libellé « Fabricant / revendeur (véranda, abri, pergola…) »
+        était en place dans Twenty et repassait tel quel tant que la fusion se
+        contentait d'ajouter les valeurs manquantes. Dès qu'on réaligne les
+        libellés, il repart — et le PATCH entier échoue en 400 tronqué, qui ne
+        cite qu'une faute à la fois. On lève ici, avec toutes.
+        """
+        with self.assertRaises(TwentyError) as ctx:
+            crm_client.merge_select_options([], [
+                {"value": "A", "label": "sans virgule"},
+                {"value": "B", "label": "avec, une virgule"},
+                {"value": "C", "label": "et, une autre"},
+            ])
+        self.assertIn("B", str(ctx.exception))
+        self.assertIn("C", str(ctx.exception))
+
     def test_champ_absent_de_twenty_la_liste_declaree_passe_telle_quelle(self):
         fusion, orphelines = crm_client.merge_select_options(
             [], [{"value": "SEED", "label": "Seed"}]

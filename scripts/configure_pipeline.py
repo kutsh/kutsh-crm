@@ -66,7 +66,7 @@ TOUR_OPTIONS = [
     {"value": "PRE_SEED", "label": "Pre-seed / amorçage", "color": "sky"},
     {"value": "SEED", "label": "Seed", "color": "blue"},
     {"value": "SERIE_A", "label": "Série A", "color": "purple"},
-    {"value": "SUBVENTION", "label": "Subvention / aide (BPI, région…)", "color": "green"},
+    {"value": "SUBVENTION", "label": "Subvention / aide (BPI · région…)", "color": "green"},
     {"value": "PRET", "label": "Prêt / financement bancaire", "color": "orange"},
     {"value": "AUTRE", "label": "Autre", "color": "gray"},
 ]

@@ -32,7 +32,9 @@ CATEGORIE_OPTIONS = [
     {"value": "INSTRUCTEUR_PRIVE", "label": "Instructeur ADS privé", "color": "green"},
     {"value": "CABINET_AVOCATS", "label": "Cabinet d'avocats", "color": "red"},
     {"value": "EDITEUR_ADS", "label": "Éditeur ADS", "color": "orange"},
-    {"value": "FABRICANT", "label": "Fabricant / revendeur (véranda, abri, pergola…)", "color": "yellow"},
+    # Séparateurs « · » et non « , » : Twenty refuse la virgule dans un libellé
+    # d'option (cf. `crm_client._refuse_les_virgules`).
+    {"value": "FABRICANT", "label": "Fabricant / revendeur (véranda · abri · pergola…)", "color": "yellow"},
     {"value": "GSB_DISTRIBUTION", "label": "GSB / distribution / négoce matériaux", "color": "yellow"},
     {"value": "CONSTRUCTEUR", "label": "Constructeur (CMI · bois · modulaire)", "color": "orange"},
     {"value": "INSTALLATEUR", "label": "Installateur (solaire · PAC · piscine)", "color": "yellow"},

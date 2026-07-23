@@ -21,6 +21,15 @@ from crm_client import merge_select_options  # noqa: E402
 from configure_pipeline import (  # noqa: E402
     SEGMENT_OPTIONS, STAGE_OPTIONS, TOUR_OPTIONS,
 )
+from configure_company_categorie import CATEGORIE_OPTIONS  # noqa: E402
+
+# Toutes les listes d'options de SELECT déclarées dans le dépôt.
+TOUTES_LES_LISTES = {
+    "Company.categorie": CATEGORIE_OPTIONS,
+    "Opportunity.segment": SEGMENT_OPTIONS,
+    "Opportunity.stage": STAGE_OPTIONS,
+    "Opportunity.tourFinancement": TOUR_OPTIONS,
+}
 
 # Valeurs déclarées AVANT le suivi de levée (issue mfmp). Aucune ne doit
 # disparaître : des opportunités les portent en base.
@@ -54,6 +63,16 @@ class TestOptionsDeclarees(unittest.TestCase):
         """
         self.assertLessEqual(SEGMENTS_HISTORIQUES, {o["value"] for o in SEGMENT_OPTIONS})
         self.assertLessEqual(STAGES_HISTORIQUES, {o["value"] for o in STAGE_OPTIONS})
+
+    def test_aucun_libelle_ne_contient_de_virgule(self):
+        """Twenty refuse la virgule dans un libellé d'option — vérifié sans réseau.
+
+        `merge_select_options` lève à l'appel, mais l'appel suppose un run contre
+        le CRM réel : ce test fait échouer la suite dès l'écriture du libellé.
+        """
+        for nom, opts in TOUTES_LES_LISTES.items():
+            with self.subTest(champ=nom):
+                merge_select_options([], opts)  # lève si un libellé porte une virgule
 
     def test_le_segment_levee_existe(self):
         self.assertIn("LEVEE", {o["value"] for o in SEGMENT_OPTIONS})
