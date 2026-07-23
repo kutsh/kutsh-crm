@@ -78,7 +78,11 @@ Chaque ligne = un cabinet intervenant pour une collectivité.
 ## Objets standard Twenty (conservés)
 
 - **People** — contacts individuels (interlocuteurs collectivités, cabinets…).
-- **Companies** — organisations génériques hors objets custom.
+- **Companies** — organisations génériques hors objets custom. Typées par le SELECT
+  `categorie` (relais/prescripteurs, segments aval, écosystème, `FINANCEUR` pour les
+  investisseurs/financeurs de Kutsh — cf. [`decisions/2026-07-23-financeurs-categorie-company.md`](../decisions/2026-07-23-financeurs-categorie-company.md)).
+  Liste de référence : `scripts/configure_company_categorie.py` (`CATEGORIE_OPTIONS`),
+  idempotent ; elle pilote aussi la segmentation newsletter (`crm_brevo.py`).
 - **Deals** — pipeline commercial, segmenté par `segment` (B2G / B2B / B2B2B).
 
 ## Relations principales
@@ -90,23 +94,39 @@ Chaque ligne = un cabinet intervenant pour une collectivité.
 - People n..1 {Collectivité, Cabinet, Éditeur ADS, Company} ✅ (1dhk)
 - Deal n..1 {Collectivité, Cabinet} + `segment` ✅ (1dhk)
 
-## Pipeline commercial (Opportunity)
+## Pipeline (Opportunity)
 
-Twenty n'expose qu'**un seul champ `stage`** par objet → on adopte un **pipeline unifié** + un champ `segment` pour distinguer les trois cycles (script : `scripts/configure_pipeline.py`, idempotent). Issue `mfmp`.
+Twenty n'expose qu'**un seul champ `stage`** par objet → on adopte un **pipeline unifié** + un champ `segment` pour distinguer les cycles (script : `scripts/configure_pipeline.py`, idempotent). Issue `mfmp`.
 
-**`segment`** (SELECT) : `B2G` · `B2B` · `B2B2B`.
+**`segment`** (SELECT) : `B2G` · `B2B` · `B2B2B` · `RELAIS` (partenariat prescripteur) · `LEVEE` (financement de Kutsh — cf. [`decisions/2026-07-23-suivi-levee-pipeline.md`](../decisions/2026-07-23-suivi-levee-pipeline.md)).
 
-**`stage`** (SELECT, 8 étapes, défaut `PROSPECTION`) — chaque étape porte le vocabulaire des trois cycles :
+**`stage`** (SELECT, 8 étapes, défaut `PROSPECTION`) — chaque étape porte le vocabulaire de chaque cycle :
 
-| `stage` | Label | B2G (marché public) | B2B (SaaS) | B2B2B (API) |
-|---|---|---|---|---|
-| PROSPECTION | Prospection | veille | lead | contact |
-| QUALIFICATION | Qualification | qualification | qualification | qualification |
-| ECHANGE | Démo / Échange | échange | démo | échange |
-| OFFRE | Offre | DCE / offre | proposition | POC |
-| EVALUATION | Audition / Essai | audition | essai | pilote |
-| GAGNE | Gagné | notification | abonnement | contrat-cadre |
-| EXECUTION | En exécution | exécution du marché | — | — |
-| PERDU | Perdu | infructueux / non retenu | churn | abandon |
+| `stage` | Label | B2G (marché public) | B2B (SaaS) | B2B2B (API) | LEVEE (financement) |
+|---|---|---|---|---|---|
+| PROSPECTION | Prospection | veille | lead | contact | sourcing / mise en relation |
+| QUALIFICATION | Qualification | qualification | qualification | qualification | fit thèse d'investissement |
+| ECHANGE | Démo / Échange | échange | démo | échange | pitch (partner meeting) |
+| OFFRE | Offre | DCE / offre | proposition | POC | term sheet |
+| EVALUATION | Audition / Essai | audition | essai | pilote | due diligence |
+| GAGNE | Gagné | notification | abonnement | contrat-cadre | closing / signature |
+| EXECUTION | En exécution | exécution du marché | — | — | reporting investisseur |
+| PERDU | Perdu | infructueux / non retenu | churn | abandon | pass |
 
 > Vues filtrées par `segment` (à créer côté UI) pour un board par cycle.
+> ⚠️ Les vues de **prévision commerciale doivent exclure `segment = LEVEE`** : un ticket
+> d'investissement vit dans `amount` comme un contrat, et gonflerait le CA prévisionnel.
+
+### Suivi de levée (`segment = LEVEE`)
+
+Une opportunité = **un financeur**, pas un tour : c'est la granularité qui bouge (chaque fonds a son étape). Le tour se reconstitue par agrégation sur `tourFinancement`.
+
+| Champ | Type | Notes |
+|-------|------|-------|
+| tourFinancement | select | `PRE_SEED` \| `SEED` \| `SERIE_A` \| `SUBVENTION` \| `PRET` \| `AUTRE`. Vide hors `LEVEE`. |
+| company | relation → Company | le financeur, `categorie = FINANCEUR` |
+| pointOfContact | relation → Person | l'interlocuteur (partner, chargé d'affaires BPI…) |
+| amount | currency (standard) | ticket envisagé, puis engagé |
+| closeDate | date (standard) | date de closing visée |
+
+Montant engagé d'un tour = somme des `amount` des opportunités `LEVEE` du tour en `GAGNE` ; le pipeline restant, les mêmes hors `GAGNE`/`PERDU`.

@@ -63,6 +63,10 @@ SEGMENTS = {
             "CABINET", "CABINET_AVOCATS", "RESEAU_PRO", "FABRICANT",
             "GSB_DISTRIBUTION", "CONSTRUCTEUR", "INSTALLATEUR",
             "AGENCE_IMMO", "COURTIER_TRAVAUX", "FEDERATION_PRO",
+            # Adoptées le 2026-07-23 depuis l'UI (cf. `--adopt`) : le découpage
+            # fin des cabinets, né du terrain, remplace en pratique `CABINET`.
+            "CABINET_DESSINATEUR_PROJETEUR", "CABINET_ARCHITECTURE",
+            "BUREAU_ETUDES_TECHNIQUES", "MARCHAND_DE_BIENS",
         ],
         "html": "pros.html",
         "subject": "Tout ce qu'un terrain cache, avant même de vous déplacer",
@@ -74,10 +78,54 @@ SEGMENTS = {
         "subject": "Où en est Kutsh — et ce qu'on vient de mettre en ligne",
     },
 }
-# Catégories volontairement NON ciblées (restent hors newsletter) : AUTRE, null.
+# Catégories volontairement NON ciblées (restent hors newsletter), en plus de `null`.
+# Les déclarer ici plutôt que de les omettre : une catégorie absente des deux listes
+# est un oubli, pas un choix, et le test de couverture le dit (cf. tests).
+#   AUTRE      — fourre-tout, pas un public identifié (cf. ADR 2026-07-07).
+#   FINANCEUR  — investisseurs/financeurs de Kutsh : relation gérée en direct,
+#                une newsletter produit adressée à un fonds serait à contre-emploi.
+CATEGORIES_HORS_NEWSLETTER = {"AUTRE", "FINANCEUR"}
 CATEGORIE_TO_SEGMENT = {
     cat: seg for seg, cfg in SEGMENTS.items() for cat in cfg["categories"]
 }
+
+
+def known_categories() -> set[str]:
+    """Catégories dont le code connaît le comportement : routées ou exclues à dessein.
+
+    C'est la définition, côté paquet, de « déclaré ». `configure_company_categorie`
+    porte la liste canonique du SELECT ; ce module porte le comportement newsletter.
+    Une catégorie de Twenty absente de cet ensemble n'a **aucun** comportement — ses
+    contacts ne reçoivent aucune lettre, sans que rien ne le dise.
+    """
+    return set(CATEGORIE_TO_SEGMENT) | CATEGORIES_HORS_NEWSLETTER
+
+
+def audit_categories(c: "TwentyClient | None" = None) -> list[tuple[str, int]]:
+    """Catégories portées par des Companies mais inconnues du code, par effectif.
+
+    Lecture seule — aucune écriture Twenty ni Brevo, pas de clé Brevo requise.
+    Point d'entrée **packagé** de l'audit de dérive : le garde-fou opérationnel
+    (cron Prefect kutsh-data) en dépend, là où `configure_company_categorie
+    --check` est l'outil local du développeur. Les deux disent la même chose ;
+    celui-ci vit dans le wheel, donc importable par le worker.
+
+    On remonte une catégorie dès qu'**une seule** Company la porte, sans attendre
+    qu'un contact y soit rattaché : au moment où un contact arrivera, la lettre
+    lui échappera déjà. Trié par nombre de fiches décroissant — la volumétrie est
+    ce qui distingue « à déclarer d'urgence » d'une scorie.
+    """
+    from crm_client import TwentyClient  # local : garde le module importable sans réseau
+
+    c = c or TwentyClient()
+    known = known_categories()
+    compte: Counter = Counter(
+        co.get("categorie") for co in c.list_all("companies", page_size=60, depth=0)
+    )
+    return sorted(
+        ((cat, n) for cat, n in compte.items() if cat and cat not in known),
+        key=lambda kv: (-kv[1], kv[0]),
+    )
 
 # Le CRM est polymorphe : People n..1 {Collectivité, Cabinet, Éditeur ADS, Company}.
 # La plupart des contacts sont rattachés à un objet CUSTOM (cabinets surtout), pas à
@@ -303,6 +351,19 @@ def gather(c: TwentyClient, with_names: bool = True):
             seg = CATEGORIE_TO_SEGMENT.get(cat)
             company = coname or ""
             source = "companies" if seg else "company_hors_perimetre"
+            if seg is None:
+                # Trois raisons très différentes de ne pas envoyer, longtemps
+                # comptées ensemble : la catégorie manque (saisie à faire), elle
+                # est hors périmètre par décision, ou elle existe dans Twenty
+                # sans être déclarée dans le code — une catégorie créée depuis
+                # l'UI. Seul le 3e cas est une dérive, et c'est le seul qui
+                # prive un public de lettre sans que personne l'ait décidé.
+                if not cat:
+                    stats["categorie_absente"] += 1
+                elif cat in CATEGORIES_HORS_NEWSLETTER:
+                    stats["hors_perimetre_assume"] += 1
+                else:
+                    stats[f"categorie_inconnue:{cat}"] += 1
 
         if seg is None:
             if source and source.startswith("exclu:"):
@@ -345,8 +406,27 @@ def print_plan(buckets, stats, by_source):
     print(f"    Déjà désinscrits ............ {stats['opted_out']}")
     print(f"    Sans aucune organisation .... {stats['no_org']}")
     print(f"    Company hors périmètre ...... {stats['unmapped_categorie']}")
+    print(f"      dont sans catégorie ....... {stats['categorie_absente']}")
+    print(f"      dont hors périmètre décidé  {stats['hors_perimetre_assume']}")
     print(f"    Relation exclue (éditeurs) .. {stats['exclu']}")
+    for cat, n in categories_inconnues(stats):
+        print(f"    ⚠️  catégorie non déclarée « {cat} » : {n} contact(s) sans lettre")
     print()
+
+
+def categories_inconnues(stats) -> list[tuple[str, int]]:
+    """Catégories vues dans Twenty mais absentes du code, par nombre de contacts.
+
+    Le test de couverture (`tests/test_crm_brevo.py`) compare la liste déclarée
+    au mapping : il ne peut rien voir d'une catégorie créée dans l'UI de Twenty.
+    C'est donc à l'exécution, seul endroit où le CRM réel est visible, que la
+    dérive doit se dire — et en nommant la catégorie, pas en gonflant un total.
+    """
+    prefixe = "categorie_inconnue:"
+    return sorted(
+        ((k[len(prefixe):], n) for k, n in stats.items() if k.startswith(prefixe)),
+        key=lambda kv: (-kv[1], kv[0]),
+    )
 
 
 # ---------------------------------------------------------------------------

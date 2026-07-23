@@ -14,9 +14,15 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _RACINE)
+sys.path.insert(0, os.path.join(_RACINE, "scripts"))
 import crm_brevo  # noqa: E402
-from crm_brevo import CONTACT_ATTRIBUTES, SEGMENTS, BrevoError, ensure_attributes, gather  # noqa: E402
+from crm_brevo import (  # noqa: E402
+    CATEGORIE_TO_SEGMENT, CONTACT_ATTRIBUTES, SEGMENTS, BrevoError, ensure_attributes, gather,
+)
+# Liste de référence des catégories : le SELECT `categorie` posé sur Company.
+from configure_company_categorie import CATEGORIE_OPTIONS  # noqa: E402
 
 
 class FakeClient:
@@ -91,6 +97,37 @@ class TestRoutage(unittest.TestCase):
         buckets, _, by_source = gather(c)
         self.assertEqual(self._segments(buckets), {"ECOSYSTEME": ["a@exemple.fr"]})
         self.assertEqual(by_source["companies"], 1)
+
+    def test_une_categorie_creee_dans_l_ui_est_nommee_dans_le_diagnostic(self):
+        """Le cas réel : 4 catégories existaient dans Twenty, créées à la main.
+
+        Le code ne peut pas les interdire — l'UI de Twenty laisse ajouter une
+        valeur à un SELECT, et c'est très bien. Ce qu'il doit garantir, c'est
+        qu'une catégorie inconnue ne se dilue pas dans un total : elle prive un
+        public de lettre, il faut donc la lire, par son nom, à chaque run.
+
+        Valeur volontairement fictive : les quatre vraies (dont
+        `CABINET_ARCHITECTURE`) ont été adoptées depuis, et ce test doit rester
+        valable pour la prochaine, pas décrire un instantané.
+        """
+        buckets, stats, _ = gather(FakeClient(
+            people=[person(email="a@exemple.fr", companyId="co1")],
+            companies=[{"id": "co1", "categorie": "NEE_DANS_L_UI", "name": "Nouveau métier"}],
+        ))
+        self.assertEqual(self._segments(buckets), {})
+        self.assertEqual(crm_brevo.categories_inconnues(stats), [("NEE_DANS_L_UI", 1)])
+        # …et ne se confond pas avec une exclusion décidée ni avec une saisie manquante
+        self.assertEqual(stats["hors_perimetre_assume"], 0)
+        self.assertEqual(stats["categorie_absente"], 0)
+
+    def test_une_company_sans_categorie_est_comptee_a_part(self):
+        """Saisie manquante ≠ dérive : l'action à mener n'est pas la même."""
+        _, stats, _ = gather(FakeClient(
+            people=[person(email="a@exemple.fr", companyId="co1")],
+            companies=[{"id": "co1", "name": "Sans catégorie"}],
+        ))
+        self.assertEqual(stats["categorie_absente"], 1)
+        self.assertEqual(crm_brevo.categories_inconnues(stats), [])
 
     def test_categorie_hors_perimetre_n_est_pas_envoyee(self):
         """AUTRE et les catégories non mappées restent hors newsletter, par défaut.
@@ -269,10 +306,78 @@ class TestConfiguration(unittest.TestCase):
                 self.assertNotIn(cat, vues, f"{cat} revendiquée par {vues.get(cat)} et {seg}")
                 vues[cat] = seg
 
+    def test_toute_categorie_est_soit_segmentee_soit_hors_perimetre(self):
+        """Une catégorie oubliée dans le mapping tombe hors newsletter en silence.
+
+        C'est le trade-off assumé de l'ADR 2026-07-07 (pas d'envoi accidentel),
+        mais rien ne distinguait « décidé hors périmètre » de « jamais mappé » :
+        ajouter une valeur au SELECT côté Twenty suffisait à priver un public de
+        toute lettre sans qu'un test bronche. `CATEGORIES_HORS_NEWSLETTER` rend
+        l'exclusion explicite, et ce test la rend obligatoire.
+        """
+        connues = set(CATEGORIE_TO_SEGMENT) | crm_brevo.CATEGORIES_HORS_NEWSLETTER
+        declarees = {o["value"] for o in CATEGORIE_OPTIONS}
+        self.assertEqual(
+            declarees - connues, set(),
+            "catégorie(s) du SELECT Twenty ni segmentée(s) ni déclarée(s) hors périmètre")
+        self.assertEqual(
+            connues - declarees, set(),
+            "catégorie(s) mappée(s) côté Brevo mais absente(s) du SELECT Twenty")
+
     def test_les_relations_routent_vers_des_segments_connus(self):
         for _, _, seg in crm_brevo.RELATION_ROUTING:
             if seg is not None:
                 self.assertIn(seg, SEGMENTS)
+
+    def test_known_categories_couvre_exactement_le_select(self):
+        """`known_categories()` est la définition packagée de « déclaré ».
+
+        Le flow d'audit (kutsh-data) s'y fie pour dire ce qui a dérivé ; il faut
+        donc qu'elle colle au SELECT canonique, ni plus ni moins. Ce test est le
+        pendant, côté paquet, de `test_toute_categorie_est_soit_segmentee…`.
+        """
+        self.assertEqual(
+            crm_brevo.known_categories(), {o["value"] for o in CATEGORIE_OPTIONS}
+        )
+
+
+class TestAuditCategories(unittest.TestCase):
+    """Audit de dérive — le point d'entrée packagé dont dépend le cron Prefect."""
+
+    def test_une_categorie_hors_code_est_remontee_avec_son_effectif(self):
+        c = FakeClient(companies=[
+            {"id": "c1", "categorie": "NEE_DANS_L_UI"},
+            {"id": "c2", "categorie": "NEE_DANS_L_UI"},
+            {"id": "c3", "categorie": "CABINET"},   # connue → ignorée
+        ])
+        self.assertEqual(crm_brevo.audit_categories(c), [("NEE_DANS_L_UI", 2)])
+
+    def test_remonte_meme_sans_contact_rattache(self):
+        """Le cas que `gather` ne voit pas : une Company sans aucune Person.
+
+        `gather` ne compte une catégorie inconnue que si un contact y transite ;
+        une catégorie fraîchement créée n'a souvent pas encore de contact. L'audit
+        lit les Companies directement pour l'attraper avant le premier envoi raté.
+        """
+        c = FakeClient(companies=[{"id": "c1", "categorie": "SANS_CONTACT"}], people=[])
+        self.assertEqual(crm_brevo.audit_categories(c), [("SANS_CONTACT", 1)])
+
+    def test_rien_a_signaler_quand_tout_est_declare(self):
+        c = FakeClient(companies=[
+            {"id": "c1", "categorie": "FINANCEUR"},   # hors périmètre, mais déclarée
+            {"id": "c2", "categorie": "COLLECTIVITE_EPCI"},
+            {"id": "c3"},                             # sans catégorie → pas une dérive
+        ])
+        self.assertEqual(crm_brevo.audit_categories(c), [])
+
+    def test_tri_par_effectif_decroissant(self):
+        c = FakeClient(companies=(
+            [{"id": f"a{i}", "categorie": "PETITE"} for i in range(2)]
+            + [{"id": f"b{i}", "categorie": "GROSSE"} for i in range(5)]
+        ))
+        self.assertEqual(
+            crm_brevo.audit_categories(c), [("GROSSE", 5), ("PETITE", 2)]
+        )
 
 
 if __name__ == "__main__":
