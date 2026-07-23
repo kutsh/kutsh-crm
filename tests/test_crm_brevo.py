@@ -98,6 +98,33 @@ class TestRoutage(unittest.TestCase):
         self.assertEqual(self._segments(buckets), {"ECOSYSTEME": ["a@exemple.fr"]})
         self.assertEqual(by_source["companies"], 1)
 
+    def test_une_categorie_creee_dans_l_ui_est_nommee_dans_le_diagnostic(self):
+        """Le cas réel : 4 catégories existaient dans Twenty, créées à la main.
+
+        Le code ne peut pas les interdire — l'UI de Twenty laisse ajouter une
+        valeur à un SELECT, et c'est très bien. Ce qu'il doit garantir, c'est
+        qu'une catégorie inconnue ne se dilue pas dans un total : elle prive un
+        public de lettre, il faut donc la lire, par son nom, à chaque run.
+        """
+        buckets, stats, _ = gather(FakeClient(
+            people=[person(email="a@exemple.fr", companyId="co1")],
+            companies=[{"id": "co1", "categorie": "CABINET_ARCHITECTURE", "name": "Archi"}],
+        ))
+        self.assertEqual(self._segments(buckets), {})
+        self.assertEqual(crm_brevo.categories_inconnues(stats), [("CABINET_ARCHITECTURE", 1)])
+        # …et ne se confond pas avec une exclusion décidée ni avec une saisie manquante
+        self.assertEqual(stats["hors_perimetre_assume"], 0)
+        self.assertEqual(stats["categorie_absente"], 0)
+
+    def test_une_company_sans_categorie_est_comptee_a_part(self):
+        """Saisie manquante ≠ dérive : l'action à mener n'est pas la même."""
+        _, stats, _ = gather(FakeClient(
+            people=[person(email="a@exemple.fr", companyId="co1")],
+            companies=[{"id": "co1", "name": "Sans catégorie"}],
+        ))
+        self.assertEqual(stats["categorie_absente"], 1)
+        self.assertEqual(crm_brevo.categories_inconnues(stats), [])
+
     def test_categorie_hors_perimetre_n_est_pas_envoyee(self):
         """AUTRE et les catégories non mappées restent hors newsletter, par défaut.
 

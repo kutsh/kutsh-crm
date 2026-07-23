@@ -309,6 +309,19 @@ def gather(c: TwentyClient, with_names: bool = True):
             seg = CATEGORIE_TO_SEGMENT.get(cat)
             company = coname or ""
             source = "companies" if seg else "company_hors_perimetre"
+            if seg is None:
+                # Trois raisons très différentes de ne pas envoyer, longtemps
+                # comptées ensemble : la catégorie manque (saisie à faire), elle
+                # est hors périmètre par décision, ou elle existe dans Twenty
+                # sans être déclarée dans le code — une catégorie créée depuis
+                # l'UI. Seul le 3e cas est une dérive, et c'est le seul qui
+                # prive un public de lettre sans que personne l'ait décidé.
+                if not cat:
+                    stats["categorie_absente"] += 1
+                elif cat in CATEGORIES_HORS_NEWSLETTER:
+                    stats["hors_perimetre_assume"] += 1
+                else:
+                    stats[f"categorie_inconnue:{cat}"] += 1
 
         if seg is None:
             if source and source.startswith("exclu:"):
@@ -351,8 +364,27 @@ def print_plan(buckets, stats, by_source):
     print(f"    Déjà désinscrits ............ {stats['opted_out']}")
     print(f"    Sans aucune organisation .... {stats['no_org']}")
     print(f"    Company hors périmètre ...... {stats['unmapped_categorie']}")
+    print(f"      dont sans catégorie ....... {stats['categorie_absente']}")
+    print(f"      dont hors périmètre décidé  {stats['hors_perimetre_assume']}")
     print(f"    Relation exclue (éditeurs) .. {stats['exclu']}")
+    for cat, n in categories_inconnues(stats):
+        print(f"    ⚠️  catégorie non déclarée « {cat} » : {n} contact(s) sans lettre")
     print()
+
+
+def categories_inconnues(stats) -> list[tuple[str, int]]:
+    """Catégories vues dans Twenty mais absentes du code, par nombre de contacts.
+
+    Le test de couverture (`tests/test_crm_brevo.py`) compare la liste déclarée
+    au mapping : il ne peut rien voir d'une catégorie créée dans l'UI de Twenty.
+    C'est donc à l'exécution, seul endroit où le CRM réel est visible, que la
+    dérive doit se dire — et en nommant la catégorie, pas en gonflant un total.
+    """
+    prefixe = "categorie_inconnue:"
+    return sorted(
+        ((k[len(prefixe):], n) for k, n in stats.items() if k.startswith(prefixe)),
+        key=lambda kv: (-kv[1], kv[0]),
+    )
 
 
 # ---------------------------------------------------------------------------
