@@ -63,6 +63,10 @@ SEGMENTS = {
             "CABINET", "CABINET_AVOCATS", "RESEAU_PRO", "FABRICANT",
             "GSB_DISTRIBUTION", "CONSTRUCTEUR", "INSTALLATEUR",
             "AGENCE_IMMO", "COURTIER_TRAVAUX", "FEDERATION_PRO",
+            # Adoptées le 2026-07-23 depuis l'UI (cf. `--adopt`) : le découpage
+            # fin des cabinets, né du terrain, remplace en pratique `CABINET`.
+            "CABINET_DESSINATEUR_PROJETEUR", "CABINET_ARCHITECTURE",
+            "BUREAU_ETUDES_TECHNIQUES", "MARCHAND_DE_BIENS",
         ],
         "html": "pros.html",
         "subject": "Tout ce qu'un terrain cache, avant même de vous déplacer",

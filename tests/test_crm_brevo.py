@@ -105,13 +105,17 @@ class TestRoutage(unittest.TestCase):
         valeur à un SELECT, et c'est très bien. Ce qu'il doit garantir, c'est
         qu'une catégorie inconnue ne se dilue pas dans un total : elle prive un
         public de lettre, il faut donc la lire, par son nom, à chaque run.
+
+        Valeur volontairement fictive : les quatre vraies (dont
+        `CABINET_ARCHITECTURE`) ont été adoptées depuis, et ce test doit rester
+        valable pour la prochaine, pas décrire un instantané.
         """
         buckets, stats, _ = gather(FakeClient(
             people=[person(email="a@exemple.fr", companyId="co1")],
-            companies=[{"id": "co1", "categorie": "CABINET_ARCHITECTURE", "name": "Archi"}],
+            companies=[{"id": "co1", "categorie": "NEE_DANS_L_UI", "name": "Nouveau métier"}],
         ))
         self.assertEqual(self._segments(buckets), {})
-        self.assertEqual(crm_brevo.categories_inconnues(stats), [("CABINET_ARCHITECTURE", 1)])
+        self.assertEqual(crm_brevo.categories_inconnues(stats), [("NEE_DANS_L_UI", 1)])
         # …et ne se confond pas avec une exclusion décidée ni avec une saisie manquante
         self.assertEqual(stats["hors_perimetre_assume"], 0)
         self.assertEqual(stats["categorie_absente"], 0)

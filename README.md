@@ -72,6 +72,40 @@ légitime (`purge_auto_leads.py`) en produit.
 python -m unittest discover -s tests    # stdlib pur, aucune dépendance
 ```
 
+## Catégories d'organisation — qui possède la liste
+
+Le SELECT `Company.categorie` est déclaré dans `scripts/configure_company_categorie.py`,
+mais l'UI de Twenty laisse **aussi** créer des valeurs. Plutôt que d'arbitrer par la
+force, on sépare deux choses (ADR [`2026-07-23-categories-ui-vs-code.md`](decisions/2026-07-23-categories-ui-vs-code.md)) :
+
+| | Propriétaire |
+|---|---|
+| L'**existence** d'une catégorie | l'UI, librement — le vocabulaire métier naît de l'usage |
+| Le **comportement** attaché (routage newsletter, qualification) | le code, exclusivement |
+
+Une catégorie créée dans l'UI est donc légitime, et porte simplement zéro comportement
+tant qu'elle n'est pas déclarée. Trois garde-fous pour que ce « zéro » ne soit jamais
+silencieux :
+
+```bash
+python scripts/configure_company_categorie.py --check    # exit 1 si Twenty a dérivé (cron)
+python scripts/configure_company_categorie.py --adopt    # imprime le bloc à coller
+python -m crm_brevo plan                                 # nomme les catégories sans lettre
+```
+
+1. La synchro **ne supprime jamais** une option non déclarée (`crm_client.merge_select_options`) —
+   la supprimer viderait la catégorie des fiches qui la portent.
+2. `--check` sort en **1** avec le nombre de fiches par catégorie non déclarée : c'est la
+   commande à mettre en tâche planifiée, sans quoi la dérive n'apparaît qu'à qui pense à
+   lancer un dry-run.
+3. `--adopt` reprend les libellés **tels que saisis dans l'UI** : adopter une catégorie née
+   du terrain, c'est prendre son vocabulaire, pas lui imposer le nôtre. Reste à la mapper
+   dans `SEGMENTS` ou `CATEGORIES_HORS_NEWSLETTER` (`crm_brevo.py`) — un test l'exige.
+
+> Cas d'école (2026-07-23) : `CABINET_DESSINATEUR_PROJETEUR`, créée dans l'UI, portait
+> **105 fiches** quand le `CABINET` versionné n'en portait qu'**une**. L'usage avait raison
+> contre le dépôt ; un script autoritaire aurait détruit l'information.
+
 ## Newsletter → Brevo
 
 Diffusion des lettres d'information segmentées via Brevo, alimentées depuis Twenty.
