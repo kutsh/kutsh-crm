@@ -74,7 +74,13 @@ SEGMENTS = {
         "subject": "Où en est Kutsh — et ce qu'on vient de mettre en ligne",
     },
 }
-# Catégories volontairement NON ciblées (restent hors newsletter) : AUTRE, null.
+# Catégories volontairement NON ciblées (restent hors newsletter), en plus de `null`.
+# Les déclarer ici plutôt que de les omettre : une catégorie absente des deux listes
+# est un oubli, pas un choix, et le test de couverture le dit (cf. tests).
+#   AUTRE      — fourre-tout, pas un public identifié (cf. ADR 2026-07-07).
+#   FINANCEUR  — investisseurs/financeurs de Kutsh : relation gérée en direct,
+#                une newsletter produit adressée à un fonds serait à contre-emploi.
+CATEGORIES_HORS_NEWSLETTER = {"AUTRE", "FINANCEUR"}
 CATEGORIE_TO_SEGMENT = {
     cat: seg for seg, cfg in SEGMENTS.items() for cat in cfg["categories"]
 }

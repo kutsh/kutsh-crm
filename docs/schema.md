@@ -78,7 +78,11 @@ Chaque ligne = un cabinet intervenant pour une collectivité.
 ## Objets standard Twenty (conservés)
 
 - **People** — contacts individuels (interlocuteurs collectivités, cabinets…).
-- **Companies** — organisations génériques hors objets custom.
+- **Companies** — organisations génériques hors objets custom. Typées par le SELECT
+  `categorie` (relais/prescripteurs, segments aval, écosystème, `FINANCEUR` pour les
+  investisseurs/financeurs de Kutsh — cf. [`decisions/2026-07-23-financeurs-categorie-company.md`](../decisions/2026-07-23-financeurs-categorie-company.md)).
+  Liste de référence : `scripts/configure_company_categorie.py` (`CATEGORIE_OPTIONS`),
+  idempotent ; elle pilote aussi la segmentation newsletter (`crm_brevo.py`).
 - **Deals** — pipeline commercial, segmenté par `segment` (B2G / B2B / B2B2B).
 
 ## Relations principales

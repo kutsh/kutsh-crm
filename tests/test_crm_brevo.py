@@ -14,9 +14,15 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _RACINE)
+sys.path.insert(0, os.path.join(_RACINE, "scripts"))
 import crm_brevo  # noqa: E402
-from crm_brevo import CONTACT_ATTRIBUTES, SEGMENTS, BrevoError, ensure_attributes, gather  # noqa: E402
+from crm_brevo import (  # noqa: E402
+    CATEGORIE_TO_SEGMENT, CONTACT_ATTRIBUTES, SEGMENTS, BrevoError, ensure_attributes, gather,
+)
+# Liste de référence des catégories : le SELECT `categorie` posé sur Company.
+from configure_company_categorie import CATEGORIE_OPTIONS  # noqa: E402
 
 
 class FakeClient:
@@ -268,6 +274,24 @@ class TestConfiguration(unittest.TestCase):
             for cat in cfg["categories"]:
                 self.assertNotIn(cat, vues, f"{cat} revendiquée par {vues.get(cat)} et {seg}")
                 vues[cat] = seg
+
+    def test_toute_categorie_est_soit_segmentee_soit_hors_perimetre(self):
+        """Une catégorie oubliée dans le mapping tombe hors newsletter en silence.
+
+        C'est le trade-off assumé de l'ADR 2026-07-07 (pas d'envoi accidentel),
+        mais rien ne distinguait « décidé hors périmètre » de « jamais mappé » :
+        ajouter une valeur au SELECT côté Twenty suffisait à priver un public de
+        toute lettre sans qu'un test bronche. `CATEGORIES_HORS_NEWSLETTER` rend
+        l'exclusion explicite, et ce test la rend obligatoire.
+        """
+        connues = set(CATEGORIE_TO_SEGMENT) | crm_brevo.CATEGORIES_HORS_NEWSLETTER
+        declarees = {o["value"] for o in CATEGORIE_OPTIONS}
+        self.assertEqual(
+            declarees - connues, set(),
+            "catégorie(s) du SELECT Twenty ni segmentée(s) ni déclarée(s) hors périmètre")
+        self.assertEqual(
+            connues - declarees, set(),
+            "catégorie(s) mappée(s) côté Brevo mais absente(s) du SELECT Twenty")
 
     def test_les_relations_routent_vers_des_segments_connus(self):
         for _, _, seg in crm_brevo.RELATION_ROUTING:

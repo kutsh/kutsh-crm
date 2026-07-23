@@ -11,11 +11,11 @@ Idempotent (crée le champ si absent). Env : TWENTY_API_KEY (+ TWENTY_BASE_URL).
 import os, json, urllib.request, urllib.error
 
 BASE = os.environ.get("TWENTY_BASE_URL", "https://twenty.kutsh.fr").rstrip("/")
-KEY = os.environ["TWENTY_API_KEY"]
 
 # Typologie des organisations. Bloc « relais/prescripteurs » + cibles directes +
 # (2026-06-25, issue commentaire cadrage 9869940877) segments aval : GSB/distribution,
 # constructeurs, installateurs, instructeurs privés, agences immo, courtiers, réseaux pro.
+# + (2026-07-23) FINANCEUR : les financeurs de Kutsh, pas de la chaîne urbanisme.
 CATEGORIE_OPTIONS = [
     {"value": "COLLECTIVITE_EPCI", "label": "Collectivité / EPCI", "color": "blue"},
     {"value": "FEDERATION_PRO", "label": "Fédération professionnelle", "color": "purple"},
@@ -35,15 +35,26 @@ CATEGORIE_OPTIONS = [
     {"value": "MEDIA", "label": "Média", "color": "pink"},
     {"value": "ACADEMIQUE", "label": "Académique / recherche (ENSA…)", "color": "red"},
     {"value": "INSTITUTIONNEL", "label": "Institutionnel (CEREMA / CAUE / Ordre…)", "color": "gray"},
+    {"value": "FINANCEUR", "label": "Financeur / investisseur (fonds · BA · BPI · subvention)", "color": "green"},
     {"value": "AUTRE", "label": "Autre", "color": "gray"},
 ]
+
+
+def _key():
+    """Lu à l'appel, pas à l'import : `CATEGORIE_OPTIONS` est la liste de
+    référence des catégories (les tests la comparent au mapping newsletter de
+    `crm_brevo`), donc importer ce module ne doit pas exiger de secret."""
+    try:
+        return os.environ["TWENTY_API_KEY"]
+    except KeyError:
+        raise SystemExit("TWENTY_API_KEY manquant")
 
 
 def req(method, path, body=None):
     url = BASE + path
     data = json.dumps(body).encode() if body is not None else None
     r = urllib.request.Request(url, data=data, method=method, headers={
-        "Authorization": "Bearer " + KEY, "Content-Type": "application/json",
+        "Authorization": "Bearer " + _key(), "Content-Type": "application/json",
         "User-Agent": "kutsh-crm/1.0"})
     try:
         with urllib.request.urlopen(r, timeout=60) as resp:
