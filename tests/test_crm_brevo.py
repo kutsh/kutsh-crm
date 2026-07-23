@@ -329,6 +329,56 @@ class TestConfiguration(unittest.TestCase):
             if seg is not None:
                 self.assertIn(seg, SEGMENTS)
 
+    def test_known_categories_couvre_exactement_le_select(self):
+        """`known_categories()` est la définition packagée de « déclaré ».
+
+        Le flow d'audit (kutsh-data) s'y fie pour dire ce qui a dérivé ; il faut
+        donc qu'elle colle au SELECT canonique, ni plus ni moins. Ce test est le
+        pendant, côté paquet, de `test_toute_categorie_est_soit_segmentee…`.
+        """
+        self.assertEqual(
+            crm_brevo.known_categories(), {o["value"] for o in CATEGORIE_OPTIONS}
+        )
+
+
+class TestAuditCategories(unittest.TestCase):
+    """Audit de dérive — le point d'entrée packagé dont dépend le cron Prefect."""
+
+    def test_une_categorie_hors_code_est_remontee_avec_son_effectif(self):
+        c = FakeClient(companies=[
+            {"id": "c1", "categorie": "NEE_DANS_L_UI"},
+            {"id": "c2", "categorie": "NEE_DANS_L_UI"},
+            {"id": "c3", "categorie": "CABINET"},   # connue → ignorée
+        ])
+        self.assertEqual(crm_brevo.audit_categories(c), [("NEE_DANS_L_UI", 2)])
+
+    def test_remonte_meme_sans_contact_rattache(self):
+        """Le cas que `gather` ne voit pas : une Company sans aucune Person.
+
+        `gather` ne compte une catégorie inconnue que si un contact y transite ;
+        une catégorie fraîchement créée n'a souvent pas encore de contact. L'audit
+        lit les Companies directement pour l'attraper avant le premier envoi raté.
+        """
+        c = FakeClient(companies=[{"id": "c1", "categorie": "SANS_CONTACT"}], people=[])
+        self.assertEqual(crm_brevo.audit_categories(c), [("SANS_CONTACT", 1)])
+
+    def test_rien_a_signaler_quand_tout_est_declare(self):
+        c = FakeClient(companies=[
+            {"id": "c1", "categorie": "FINANCEUR"},   # hors périmètre, mais déclarée
+            {"id": "c2", "categorie": "COLLECTIVITE_EPCI"},
+            {"id": "c3"},                             # sans catégorie → pas une dérive
+        ])
+        self.assertEqual(crm_brevo.audit_categories(c), [])
+
+    def test_tri_par_effectif_decroissant(self):
+        c = FakeClient(companies=(
+            [{"id": f"a{i}", "categorie": "PETITE"} for i in range(2)]
+            + [{"id": f"b{i}", "categorie": "GROSSE"} for i in range(5)]
+        ))
+        self.assertEqual(
+            crm_brevo.audit_categories(c), [("GROSSE", 5), ("PETITE", 2)]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

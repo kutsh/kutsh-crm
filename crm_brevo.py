@@ -89,6 +89,44 @@ CATEGORIE_TO_SEGMENT = {
     cat: seg for seg, cfg in SEGMENTS.items() for cat in cfg["categories"]
 }
 
+
+def known_categories() -> set[str]:
+    """Catégories dont le code connaît le comportement : routées ou exclues à dessein.
+
+    C'est la définition, côté paquet, de « déclaré ». `configure_company_categorie`
+    porte la liste canonique du SELECT ; ce module porte le comportement newsletter.
+    Une catégorie de Twenty absente de cet ensemble n'a **aucun** comportement — ses
+    contacts ne reçoivent aucune lettre, sans que rien ne le dise.
+    """
+    return set(CATEGORIE_TO_SEGMENT) | CATEGORIES_HORS_NEWSLETTER
+
+
+def audit_categories(c: "TwentyClient | None" = None) -> list[tuple[str, int]]:
+    """Catégories portées par des Companies mais inconnues du code, par effectif.
+
+    Lecture seule — aucune écriture Twenty ni Brevo, pas de clé Brevo requise.
+    Point d'entrée **packagé** de l'audit de dérive : le garde-fou opérationnel
+    (cron Prefect kutsh-data) en dépend, là où `configure_company_categorie
+    --check` est l'outil local du développeur. Les deux disent la même chose ;
+    celui-ci vit dans le wheel, donc importable par le worker.
+
+    On remonte une catégorie dès qu'**une seule** Company la porte, sans attendre
+    qu'un contact y soit rattaché : au moment où un contact arrivera, la lettre
+    lui échappera déjà. Trié par nombre de fiches décroissant — la volumétrie est
+    ce qui distingue « à déclarer d'urgence » d'une scorie.
+    """
+    from crm_client import TwentyClient  # local : garde le module importable sans réseau
+
+    c = c or TwentyClient()
+    known = known_categories()
+    compte: Counter = Counter(
+        co.get("categorie") for co in c.list_all("companies", page_size=60, depth=0)
+    )
+    return sorted(
+        ((cat, n) for cat, n in compte.items() if cat and cat not in known),
+        key=lambda kv: (-kv[1], kv[0]),
+    )
+
 # Le CRM est polymorphe : People n..1 {Collectivité, Cabinet, Éditeur ADS, Company}.
 # La plupart des contacts sont rattachés à un objet CUSTOM (cabinets surtout), pas à
 # Company. On route donc le segment via la relation, par ordre de PRIORITÉ ci-dessous
