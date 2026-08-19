@@ -22,6 +22,7 @@ BASE = os.environ.get("TWENTY_BASE_URL", "https://twenty.kutsh.fr").rstrip("/")
 # (2026-06-25, issue commentaire cadrage 9869940877) segments aval : GSB/distribution,
 # constructeurs, installateurs, instructeurs privés, agences immo, courtiers, réseaux pro.
 # + (2026-07-23) FINANCEUR : les financeurs de Kutsh, pas de la chaîne urbanisme.
+# + (2026-08-18) AGENCE_VERANDA : née dans l'UI, adoptée (cf. decisions/).
 CATEGORIE_OPTIONS = [
     {"value": "COLLECTIVITE_EPCI", "label": "Collectivité / EPCI", "color": "blue"},
     {"value": "FEDERATION_PRO", "label": "Fédération professionnelle", "color": "purple"},
@@ -46,6 +47,10 @@ CATEGORIE_OPTIONS = [
     {"value": "GSB_DISTRIBUTION", "label": "GSB / distribution / négoce matériaux", "color": "yellow"},
     {"value": "CONSTRUCTEUR", "label": "Constructeur (CMI · bois · modulaire)", "color": "orange"},
     {"value": "INSTALLATEUR", "label": "Installateur (solaire · PAC · piscine)", "color": "yellow"},
+    # (2026-08-18) Adoptée depuis l'UI : l'import du 2026-08-11 a typé 206 fiches
+    # `AGENCE_VERANDA` — les agences qui *posent* la véranda, distinctes du
+    # `FABRICANT` qui la produit ou la revend. Libellé d'origine conservé.
+    {"value": "AGENCE_VERANDA", "label": "Agence véranda (pose / installation)", "color": "yellow"},
     {"value": "AGENCE_IMMO", "label": "Agence / réseau immobilier", "color": "pink"},
     {"value": "COURTIER_TRAVAUX", "label": "Courtier travaux", "color": "pink"},
     {"value": "MARCHAND_DE_BIENS", "label": "Marchand de biens", "color": "pink"},

@@ -67,6 +67,10 @@ SEGMENTS = {
             # fin des cabinets, né du terrain, remplace en pratique `CABINET`.
             "CABINET_DESSINATEUR_PROJETEUR", "CABINET_ARCHITECTURE",
             "BUREAU_ETUDES_TECHNIQUES", "MARCHAND_DE_BIENS",
+            # Adoptée le 2026-08-18 (206 fiches issues de l'import du 11/08) :
+            # poseurs de vérandas, même public que FABRICANT/INSTALLATEUR — la
+            # lettre « pros » leur parle du risque PLU avant le devis.
+            "AGENCE_VERANDA",
         ],
         "html": "pros.html",
         "subject": "Tout ce qu'un terrain cache, avant même de vous déplacer",
