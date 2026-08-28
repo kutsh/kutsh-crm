@@ -81,6 +81,29 @@ OBJECTS = [
    fields=[
      dict(name="typeIntervention", label="Rôle", type="SELECT", options=opts(["Dessinateur-projeteur","Architecte","AMO","Autre"])),
    ]),
+ # Traçage des demandes de features/retours — process « qui m'a demandé quoi → accuser
+ # réception → remercier à la livraison ». La Demande est la feature dédupliquée ;
+ # la Sollicitation en est l'atome (une personne, un moment, un canal, un verbatim).
+ dict(ns="demande", np="demandes", ls="Demande", lp="Demandes", icon="IconBulb",
+   fields=[
+     dict(name="description", label="Description", type="TEXT"),
+     dict(name="statut", label="Statut", type="SELECT",
+          options=opts(["À trier","Reçue","En cours","Livrée","Clôturée","Sans suite"])),
+     dict(name="tracker", label="Tracker", type="SELECT", options=opts(["Basecamp","kata","GitHub","Aucun"])),
+     dict(name="lienTravail", label="Lien travail", type="LINKS"),
+   ]),
+ dict(ns="sollicitation", np="sollicitations", ls="Sollicitation", lp="Sollicitations", icon="IconMessage",
+   fields=[
+     dict(name="canal", label="Canal", type="SELECT",
+          options=opts(["In-app","Mail","LinkedIn","Basecamp","RDV","GitHub","Autre"])),
+     dict(name="dateSollicitation", label="Date", type="DATE_TIME"),
+     dict(name="verbatim", label="Verbatim", type="TEXT"),
+     dict(name="emailBrut", label="Email brut", type="TEXT"),
+     dict(name="contexte", label="Contexte", type="TEXT"),
+     dict(name="lienSource", label="Lien source", type="LINKS"),
+     dict(name="accuseEnvoye", label="Accusé envoyé", type="DATE_TIME"),
+     dict(name="remercieEnvoye", label="Remerciement envoyé", type="DATE_TIME"),
+   ]),
 ]
 
 # relations MANY_TO_ONE : (objet source, nom champ, label, objet cible, label champ inverse, icône)
@@ -108,6 +131,11 @@ RELATIONS = [
  # navigable depuis la fiche (import de prospects par le bot Kutsh).
  ("signal","person","Contact","person","Signaux","IconUser"),
  ("signal","company","Société","company","Signaux","IconBuilding"),
+ # Traçage des demandes : Sollicitation n..1 {Demande, Person}. La Demande agrège
+ # ses sollicitations (plusieurs demandeurs pour une même feature) ; le Contact
+ # relie l'atome à la personne qui a demandé (pour le recontact).
+ ("sollicitation","demande","Demande","demande","Sollicitations","IconMessage"),
+ ("sollicitation","person","Contact","person","Sollicitations","IconUser"),
 ]
 
 def fetch_objects():
