@@ -75,6 +75,43 @@ Chaque ligne = un cabinet intervenant pour une collectivité.
 | collectivite | relation → Collectivité (n..1) | manuel/enrichissement | |
 | typeIntervention | select | manuel | dessinateur-projeteur \| architecte \| AMO \| autre |
 
+### Demande
+Feature ou retour **dédupliqué** demandé par un ou plusieurs contacts. Cœur du
+process de traçage « qui m'a demandé quoi → accuser réception → remercier à la
+livraison » (`scripts/recontact.py`).
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| statut | select | triage | à trier \| reçue \| en cours \| **livrée** \| clôturée \| sans suite |
+| tracker | select | triage | basecamp \| kata \| github \| aucun |
+| lienTravail | links | triage | URL de la carte Basecamp / kata / issue GitHub |
+| description | text | triage | |
+| sollicitations | relation → Sollicitation (1..n) | — | les demandeurs (inverse ci-dessous) |
+
+**Convention de statut** : `livrée` = expédié **et** à remercier (alimente la file
+MERCI du moteur) ; `clôturée` = traité mais **sans recontact** (retour interne,
+refusé, ou déjà répondu de vive voix).
+
+### Sollicitation
+L'**atome relationnel** : une personne, un moment, un canal, un verbatim. Plusieurs
+sollicitations pointent vers une même Demande — c'est ce qui permet de remercier
+chaque demandeur en citant *sa* phrase, sur *son* canal. Alimenté à la source par
+le feedback in-app Lazone (`dev-server.mjs` → `/rest/sollicitations`, best-effort)
+et par les autres canaux (mail/LinkedIn/RDV/Basecamp) au triage.
+
+| Champ | Type | Source | Notes |
+|-------|------|--------|-------|
+| canal | select | capture | in-app \| mail \| linkedin \| basecamp \| rdv \| github \| autre |
+| dateSollicitation | date_time | capture | |
+| verbatim | text | capture | la phrase exacte du demandeur |
+| emailBrut | text | capture | email tel que reçu, avant rattachement au Contact |
+| contexte | text | capture | type / adresse / parcelle / URL (in-app) |
+| lienSource | links | capture | URL du mail/DM/carte d'origine |
+| accuseEnvoye | date_time | recontact | tampon : accusé de réception envoyé |
+| remercieEnvoye | date_time | recontact | tampon : remerciement envoyé |
+| demande | relation → Demande (n..1) | triage | |
+| person | relation → Person (n..1, « Contact ») | triage | rattachement au demandeur |
+
 ## Objets standard Twenty (conservés)
 
 - **People** — contacts individuels (interlocuteurs collectivités, cabinets…).
@@ -99,6 +136,7 @@ Chaque ligne = un cabinet intervenant pour une collectivité.
 - Signal n..1 {Collectivité, Cabinet, Éditeur ADS, Deal, **Person, Company**} (polymorphe = relations nullables) ✅ (1dhk ; Person/Company ajoutés pour le sourcing LinkedIn — un signal « Post LinkedIn » se relie au contact)
 - People n..1 {Collectivité, Cabinet, Éditeur ADS, Company} ✅ (1dhk)
 - Deal n..1 {Collectivité, Cabinet} + `segment` ✅ (1dhk)
+- Demande 1..n Sollicitation · Sollicitation n..1 {Demande, Person} ✅ (traçage des demandes)
 
 ## Pipeline (Opportunity)
 
